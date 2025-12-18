@@ -422,23 +422,23 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
             <div className="px-8 py-4 border-b border-gray-100 bg-gray-50">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Requestor Name</label>
+                  <label className="block text-xs text-gray-500 mb-1">Requestor Name</label>
                 <input
                   type="text"
                   value={requestorName}
                   onChange={(e) => setRequestorName(e.target.value)}
                     placeholder="Your name"
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Approval Email</label>
+                  <label className="block text-xs text-gray-500 mb-1">Approval Email</label>
                   <input
                     type="email"
                     value={approvalEmail}
                     onChange={(e) => setApprovalEmail(e.target.value)}
                     placeholder="approver@company.com"
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
               </div>
@@ -511,10 +511,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
               <div className="space-y-4">
               {/* Shoot Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Shoot Name</label>
+                  <label className="block text-xs text-gray-500 mb-1">Shoot Name</label>
                 <input
                   type="text"
-                  value={activeShoot.shootName}
+                    value={activeShoot.shootName}
                     onChange={(e) => updateActiveShoot('shootName', e.target.value)}
                   placeholder="e.g., Diwali Ad Campaign"
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -523,10 +523,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
 
               {/* Location */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+                  <label className="block text-xs text-gray-500 mb-1">Location</label>
                 <input
                   type="text"
-                  value={activeShoot.location}
+                    value={activeShoot.location}
                     onChange={(e) => updateActiveShoot('location', e.target.value)}
                   placeholder="e.g., Studio 5, Mumbai"
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -547,7 +547,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                   
                   {/* Start Date */}
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Start Date</label>
+                    <label className="block text-xs text-gray-500 mb-1">Start Date</label>
                       <button
                         type="button"
                         disabled={areDatesLocked}
@@ -653,14 +653,13 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                 }}
                                   className={`w-9 h-9 text-sm rounded-full transition-all flex items-center justify-center font-medium ${
                                     isDisabled 
-                                      ? 'text-gray-300 bg-gray-100 cursor-not-allowed' 
+                                      ? 'text-gray-200 cursor-not-allowed line-through' 
                                       : isSelected
                                         ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
                                         : isToday
                                           ? 'bg-gray-200 text-gray-900 font-bold'
                                           : 'hover:bg-blue-50 text-gray-900'
                                   }`}
-                                  title={isDisabled ? 'Past dates cannot be selected' : ''}
                               >
                                 {day}
                               </button>
@@ -675,7 +674,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
 
                   {/* End Date */}
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">End Date</label>
+                    <label className="block text-xs text-gray-500 mb-1">End Date</label>
                       <button
                         type="button"
                         disabled={areDatesLocked}
@@ -780,14 +779,13 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                   }}
                                   className={`w-9 h-9 text-sm rounded-full transition-all flex items-center justify-center font-medium ${
                                     isDisabled 
-                                      ? 'text-gray-300 bg-gray-100 cursor-not-allowed' 
+                                      ? 'text-gray-200 cursor-not-allowed line-through' 
                                       : isSelected
                                         ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
                                         : isToday
                                           ? 'bg-gray-200 text-gray-900 font-bold'
                                           : 'hover:bg-blue-50 text-gray-900'
                                   }`}
-                                  title={isDisabled ? 'This date cannot be selected' : ''}
                               >
                                 {day}
                               </button>
@@ -805,24 +803,24 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                 <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm text-gray-500">This Shoot Total</div>
+                      <div className="text-xs text-gray-500">This Shoot Total</div>
                       <div className="text-xl font-semibold" style={{ color: getBudgetStatus(calculateShootTotal(activeShoot)).color }}>
                         ₹{calculateShootTotal(activeShoot).toLocaleString()}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">Items</div>
+                      <div className="text-xs text-gray-500">Items</div>
                       <div className="text-lg font-medium text-gray-900">
                         {activeShoot.cart.reduce((sum, item) => sum + item.quantity, 0)}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">Days</div>
+                      <div className="text-xs text-gray-500">Days</div>
                       <div className="text-lg font-medium text-gray-900">
                         {calculateDays(activeShoot)}
                       </div>
-                    </div>
                   </div>
+                </div>
               </div>
               </div>
             </div>
