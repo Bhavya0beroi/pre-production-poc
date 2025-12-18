@@ -14,7 +14,7 @@ import { EditShootForm } from './components/EditShootForm';
 import { isSupabaseConfigured } from './lib/supabase';
 
 // API URL for Railway backend
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = 'https://divine-nature-production-c49a.up.railway.app';
 
 export type ShootStatus = 
   | 'new_request' 
