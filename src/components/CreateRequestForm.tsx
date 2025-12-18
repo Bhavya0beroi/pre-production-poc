@@ -1024,7 +1024,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
           <button
             onClick={handleSubmit}
             disabled={!isFormValid()}
-            className="px-6 py-3 rounded-lg text-white transition-all disabled:opacity-50"
+            className="px-6 py-2.5 rounded-lg text-white transition-all disabled:opacity-50 font-medium hover:opacity-90"
             style={{ backgroundColor: '#2D60FF' }}
           >
             {shoots.length > 1 ? `Submit ${shoots.length} Shoots` : 'Submit Request'}

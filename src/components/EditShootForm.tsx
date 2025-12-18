@@ -249,13 +249,13 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
               </button>
               <button
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+                className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-5 py-2 rounded-lg text-white flex items-center gap-2 transition-colors hover:opacity-90 text-sm font-medium"
+                className="px-5 py-2.5 rounded-lg text-white flex items-center gap-2 transition-colors hover:opacity-90 text-sm font-medium"
                 style={{ backgroundColor: '#27AE60' }}
               >
                 <Save className="w-4 h-4" />

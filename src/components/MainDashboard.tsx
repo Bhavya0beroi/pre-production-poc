@@ -196,7 +196,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenInvoice(shoot.id)}
-          className="px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm"
+          className="px-5 py-2.5 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm font-medium hover:bg-orange-50"
           style={{ borderColor: '#F2994A', color: '#F2994A' }}
         >
           <Upload className="w-4 h-4" />
@@ -209,7 +209,7 @@ export function MainDashboard({
       return (
         <button
           onClick={onOpenApprovals}
-          className="px-4 py-2 rounded-lg text-white text-sm transition-colors"
+          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Review for Approval
@@ -221,7 +221,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenVendorLink(shoot.id)}
-          className="px-4 py-2 rounded-lg text-white text-sm transition-colors"
+          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Send to Vendor
@@ -233,7 +233,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenVendorLink(shoot.id)}
-          className="px-4 py-2 rounded-lg text-white text-sm transition-colors"
+          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Send to Vendor
@@ -399,7 +399,7 @@ export function MainDashboard({
             </div>
             <button
               onClick={onOpenNewRequest}
-              className="px-4 py-2 rounded-lg text-white flex items-center gap-2 transition-colors"
+              className="px-5 py-2.5 rounded-lg text-white flex items-center gap-2 transition-colors font-medium hover:opacity-90"
               style={{ backgroundColor: '#2D60FF' }}
             >
               <Plus className="w-5 h-5" />
@@ -593,13 +593,13 @@ export function MainDashboard({
                     setShowSendToVendorModal(false);
                     setSelectedShootForVendor(null);
                   }}
-                  className="flex-1 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmSendToVendor}
-                  className="flex-1 py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
+                  className="flex-1 px-5 py-2.5 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
                   style={{ backgroundColor: '#2D60FF' }}
                 >
                   <Mail className="w-4 h-4" />

@@ -219,7 +219,7 @@ export function EquipmentCatalogManager({
               </div>
               <button
                 onClick={openAddDialog}
-                className="px-4 py-2.5 rounded-lg text-white flex items-center gap-2 transition-colors hover:opacity-90"
+                className="px-5 py-2.5 rounded-lg text-white flex items-center gap-2 transition-colors font-medium hover:opacity-90"
                 style={{ backgroundColor: '#2D60FF' }}
               >
                 <Plus className="w-5 h-5" />
@@ -401,13 +401,13 @@ export function EquipmentCatalogManager({
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDrawer(false)}
-                  className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="flex-1 py-3 rounded-lg text-white transition-colors font-medium hover:opacity-90"
+                  className="flex-1 px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90"
                   style={{ backgroundColor: '#2D60FF' }}
                 >
                   Save Changes
@@ -482,14 +482,14 @@ export function EquipmentCatalogManager({
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowAddDialog(false)}
-                className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                className="flex-1 px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddItem}
                 disabled={!formName || !formRate}
-                className="flex-1 py-3 rounded-lg text-white disabled:opacity-50 font-medium transition-colors hover:opacity-90"
+                className="flex-1 px-5 py-2.5 rounded-lg text-white disabled:opacity-50 font-medium transition-colors hover:opacity-90"
                 style={{ backgroundColor: '#2D60FF' }}
               >
                 Add Equipment

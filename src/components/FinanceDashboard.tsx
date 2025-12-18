@@ -513,7 +513,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                     alert('Opening PDF in new tab...');
                     window.open('#', '_blank');
                   }}
-                  className="flex-1 py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
+                  className="flex-1 px-5 py-2.5 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
                   style={{ backgroundColor: '#2D60FF' }}
                 >
                   <ExternalLink className="w-4 h-4" />

@@ -232,7 +232,7 @@ export function InvoiceManagement({ shoot, onUploadInvoice, onMarkPaid, onClose 
           <div className="p-6 border-t border-gray-100">
             <button
               onClick={handleVerifyAndPay}
-              className="w-full py-4 rounded-xl text-white flex items-center justify-center gap-2 transition-all hover:opacity-90"
+              className="w-full py-2.5 rounded-lg text-white flex items-center justify-center gap-2 transition-all font-medium hover:opacity-90"
               style={{ backgroundColor: '#27AE60' }}
             >
               <CheckCircle className="w-5 h-5" />

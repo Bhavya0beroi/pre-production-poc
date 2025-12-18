@@ -777,14 +777,14 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setShowRejectDialog(true)}
-                    className="py-2.5 rounded-lg border-2 text-red-600 hover:bg-red-50 transition-colors font-medium text-sm"
+                    className="px-5 py-2.5 rounded-lg border-2 text-red-600 hover:bg-red-50 transition-colors font-medium text-sm"
               style={{ borderColor: '#DC2626' }}
             >
                     Reject {isMultiShoot ? 'All' : 'Quote'}
             </button>
             <button
               onClick={handleApprove}
-                    className="py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm"
+                    className="px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm"
               style={{ backgroundColor: '#27AE60' }}
             >
                     Approve {isMultiShoot ? 'All' : 'Quote'}
@@ -863,14 +863,14 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
             <div className="flex gap-3">
               <button
                 onClick={() => setShowRejectDialog(false)}
-                className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                className="flex-1 px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleReject}
                 disabled={!rejectReason.trim()}
-                className="flex-1 py-3 rounded-lg text-white disabled:opacity-50 font-medium transition-colors"
+                className="flex-1 px-5 py-2.5 rounded-lg text-white disabled:opacity-50 font-medium transition-colors hover:opacity-90"
                 style={{ backgroundColor: '#DC2626' }}
               >
                 Reject Quote

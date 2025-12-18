@@ -425,7 +425,7 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
             <div className="px-6 py-4 border-t border-gray-200 bg-white sticky bottom-0">
               <button
                 type="submit"
-                className="w-full py-3 rounded-lg text-white transition-all font-medium"
+                className="w-full py-2.5 rounded-lg text-white transition-all font-medium hover:opacity-90"
                 style={{ backgroundColor: '#2D60FF' }}
               >
                 {isMultiShoot 
