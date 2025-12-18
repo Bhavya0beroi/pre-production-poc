@@ -95,8 +95,11 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 rounded-xl text-white font-medium transition-all hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 mt-2"
-              style={{ backgroundColor: '#2D60FF' }}
+              className="w-full h-14 rounded-xl text-white font-semibold text-base transition-all hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-3 mt-4"
+              style={{ 
+                backgroundColor: '#2D60FF',
+                boxShadow: '0 4px 14px 0 rgba(45, 96, 255, 0.4)'
+              }}
             >
               {isLoading ? (
                 <>

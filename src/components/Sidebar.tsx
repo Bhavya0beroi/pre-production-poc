@@ -27,7 +27,7 @@ export function Sidebar({ activeMenu, onMenuChange, notificationCounts = {} }: S
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#2D60FF' }}>
             <Film className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl">Pre-Production POC</span>
+          <span className="text-xl">ShootFlow</span>
         </div>
       </div>
 

@@ -72,11 +72,11 @@ export interface Shoot {
 
 export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot';
 
-// LocalStorage keys
+// LocalStorage keys - v2 to clear old data
 const STORAGE_KEYS = {
-  SHOOTS: 'shootflow_shoots',
-  CATALOG: 'shootflow_catalog',
-  NOTIFICATIONS: 'shootflow_notifications',
+  SHOOTS: 'shootflow_shoots_v2',
+  CATALOG: 'shootflow_catalog_v2',
+  NOTIFICATIONS: 'shootflow_notifications_v2',
 };
 
 // Helper to safely parse JSON from localStorage
