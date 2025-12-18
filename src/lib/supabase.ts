@@ -1,16 +1,47 @@
-import { createClient } from '@supabase/supabase-js';
+// API Configuration for Railway PostgreSQL Backend
+const API_URL = import.meta.env.VITE_API_URL || '';
 
-// Supabase configuration - these will be set via environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-// Check if Supabase is configured
+// Check if API is configured
 export const isSupabaseConfigured = () => {
-  return supabaseUrl && supabaseAnonKey && supabaseUrl !== '' && supabaseAnonKey !== '';
+  return API_URL && API_URL !== '';
 };
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Dummy supabase object for compatibility (not used with Railway)
+export const supabase = {
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => Promise.resolve({ data: null, error: null }),
+    delete: () => Promise.resolve({ error: null }),
+    upsert: () => Promise.resolve({ error: null }),
+  })
+};
+
+// API helper functions
+async function apiCall(endpoint: string, options?: RequestInit) {
+  if (!API_URL) {
+    console.warn('API URL not configured');
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      ...options,
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API call failed:', error);
+    return null;
+  }
+}
 
 // Database types
 export interface DbShoot {
@@ -51,182 +82,65 @@ export interface DbCatalogItem {
 // Database operations for Shoots
 export const shootsDb = {
   async getAll(): Promise<DbShoot[]> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using localStorage');
-      return [];
-    }
-    
-    const { data, error } = await supabase
-      .from('shoots')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching shoots:', error);
-      return [];
-    }
-    
+    const data = await apiCall('/api/shoots');
     return data || [];
   },
 
   async create(shoot: DbShoot): Promise<DbShoot | null> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return null;
-    }
-    
-    const { data, error } = await supabase
-      .from('shoots')
-      .insert([shoot])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating shoot:', error);
-      return null;
-    }
-    
-    return data;
+    return await apiCall('/api/shoots', {
+      method: 'POST',
+      body: JSON.stringify(shoot),
+    });
   },
 
   async update(id: string, updates: Partial<DbShoot>): Promise<DbShoot | null> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return null;
-    }
-    
-    const { data, error } = await supabase
-      .from('shoots')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating shoot:', error);
-      return null;
-    }
-    
-    return data;
+    return await apiCall('/api/shoots', {
+      method: 'POST',
+      body: JSON.stringify({ id, ...updates }),
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return false;
-    }
-    
-    const { error } = await supabase
-      .from('shoots')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting shoot:', error);
-      return false;
-    }
-    
-    return true;
+    const result = await apiCall(`/api/shoots/${id}`, {
+      method: 'DELETE',
+    });
+    return result?.success || false;
   }
 };
 
 // Database operations for Catalog
 export const catalogDb = {
   async getAll(): Promise<DbCatalogItem[]> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using localStorage');
-      return [];
-    }
-    
-    const { data, error } = await supabase
-      .from('catalog_items')
-      .select('*')
-      .order('category', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching catalog:', error);
-      return [];
-    }
-    
+    const data = await apiCall('/api/catalog');
     return data || [];
   },
 
   async upsert(items: DbCatalogItem[]): Promise<boolean> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return false;
-    }
-    
-    const { error } = await supabase
-      .from('catalog_items')
-      .upsert(items, { onConflict: 'id' });
-    
-    if (error) {
-      console.error('Error upserting catalog:', error);
-      return false;
-    }
-    
-    return true;
+    const result = await apiCall('/api/catalog/bulk', {
+      method: 'POST',
+      body: JSON.stringify(items),
+    });
+    return result?.success || false;
   },
 
   async create(item: DbCatalogItem): Promise<DbCatalogItem | null> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return null;
-    }
-    
-    const { data, error } = await supabase
-      .from('catalog_items')
-      .insert([item])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating catalog item:', error);
-      return null;
-    }
-    
-    return data;
+    return await apiCall('/api/catalog', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
   },
 
   async update(id: string, updates: Partial<DbCatalogItem>): Promise<DbCatalogItem | null> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return null;
-    }
-    
-    const { data, error } = await supabase
-      .from('catalog_items')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating catalog item:', error);
-      return null;
-    }
-    
-    return data;
+    return await apiCall('/api/catalog', {
+      method: 'POST',
+      body: JSON.stringify({ id, ...updates }),
+    });
   },
 
   async delete(id: string): Promise<boolean> {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
-      return false;
-    }
-    
-    const { error } = await supabase
-      .from('catalog_items')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting catalog item:', error);
-      return false;
-    }
-    
-    return true;
+    const result = await apiCall(`/api/catalog/${id}`, {
+      method: 'DELETE',
+    });
+    return result?.success || false;
   }
 };
-

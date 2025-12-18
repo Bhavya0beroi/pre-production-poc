@@ -11,7 +11,10 @@ import { NotificationToast, EmailThreadModal, EmailSentModal, type Notification,
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
-import { supabase, isSupabaseConfigured, shootsDb, catalogDb } from './lib/supabase';
+import { isSupabaseConfigured } from './lib/supabase';
+
+// API URL for Railway backend
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export type ShootStatus = 
   | 'new_request' 
@@ -626,85 +629,79 @@ The invoice has been received and is being processed.
     loadFromStorage(STORAGE_KEYS.SHOOTS, defaultShoots)
   );
 
-  // Load data from Supabase on mount (if configured)
+  // Load data from API on mount (if configured)
   useEffect(() => {
-    const loadDataFromSupabase = async () => {
-      if (!isSupabaseConfigured()) {
-        console.log('Supabase not configured, using localStorage');
+    const loadDataFromAPI = async () => {
+      if (!API_URL) {
+        console.log('API not configured, using localStorage');
         setIsLoadingData(false);
         return;
       }
 
       try {
-        console.log('Loading data from Supabase...');
+        console.log('Loading data from API...');
         
-        // Load shoots from Supabase
-        const { data: shootsData, error: shootsError } = await supabase
-          .from('shoots')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (shootsError) {
-          console.error('Error loading shoots:', shootsError);
-        } else if (shootsData && shootsData.length > 0) {
-          // Convert database format to app format
-          const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            date: s.date,
-            duration: s.duration,
-            location: s.location,
-            equipment: s.equipment || [],
-            status: s.status,
-            requestor: s.requestor,
-            vendorQuote: s.vendor_quote,
-            approved: s.approved,
-            approvedAmount: s.approved_amount,
-            invoiceFile: s.invoice_file,
-            paid: s.paid,
-            rejectionReason: s.rejection_reason,
-            approvalEmail: s.approval_email,
-            cancellationReason: s.cancellation_reason,
-            activities: s.activities || [],
-            emailThreadId: s.email_thread_id,
-            createdAt: s.created_at ? new Date(s.created_at) : undefined,
-            shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
-            requestGroupId: s.request_group_id,
-            isMultiShoot: s.is_multi_shoot,
-            multiShootIndex: s.multi_shoot_index,
-            totalShootsInRequest: s.total_shoots_in_request,
-          }));
-          setShoots(formattedShoots);
-          console.log('Loaded', formattedShoots.length, 'shoots from Supabase');
+        // Load shoots from API
+        const shootsResponse = await fetch(`${API_URL}/api/shoots`);
+        if (shootsResponse.ok) {
+          const shootsData = await shootsResponse.json();
+          if (shootsData && shootsData.length > 0) {
+            // Convert database format to app format
+            const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              date: s.date,
+              duration: s.duration,
+              location: s.location,
+              equipment: s.equipment || [],
+              status: s.status,
+              requestor: s.requestor,
+              vendorQuote: s.vendor_quote,
+              approved: s.approved,
+              approvedAmount: s.approved_amount,
+              invoiceFile: s.invoice_file,
+              paid: s.paid,
+              rejectionReason: s.rejection_reason,
+              approvalEmail: s.approval_email,
+              cancellationReason: s.cancellation_reason,
+              activities: s.activities || [],
+              emailThreadId: s.email_thread_id,
+              createdAt: s.created_at ? new Date(s.created_at) : undefined,
+              shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
+              requestGroupId: s.request_group_id,
+              isMultiShoot: s.is_multi_shoot,
+              multiShootIndex: s.multi_shoot_index,
+              totalShootsInRequest: s.total_shoots_in_request,
+            }));
+            setShoots(formattedShoots);
+            console.log('Loaded', formattedShoots.length, 'shoots from API');
+          }
         }
 
-        // Load catalog from Supabase
-        const { data: catalogData, error: catalogError } = await supabase
-          .from('catalog_items')
-          .select('*')
-          .order('category', { ascending: true });
-
-        if (catalogError) {
-          console.error('Error loading catalog:', catalogError);
-        } else if (catalogData && catalogData.length > 0) {
-          const formattedCatalog: CatalogItem[] = catalogData.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            dailyRate: c.daily_rate,
-            category: c.category,
-            lastUpdated: c.last_updated,
-          }));
-          setCatalogItems(formattedCatalog);
-          console.log('Loaded', formattedCatalog.length, 'catalog items from Supabase');
+        // Load catalog from API
+        const catalogResponse = await fetch(`${API_URL}/api/catalog`);
+        if (catalogResponse.ok) {
+          const catalogData = await catalogResponse.json();
+          if (catalogData && catalogData.length > 0) {
+            const formattedCatalog: CatalogItem[] = catalogData.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              dailyRate: parseFloat(c.daily_rate),
+              category: c.category,
+              lastUpdated: c.last_updated,
+            }));
+            setCatalogItems(formattedCatalog);
+            console.log('Loaded', formattedCatalog.length, 'catalog items from API');
+          }
         }
       } catch (error) {
-        console.error('Error loading data from Supabase:', error);
+        console.error('Error loading data from API:', error);
       } finally {
         setIsLoadingData(false);
       }
     };
 
-    loadDataFromSupabase();
+    loadDataFromAPI();
   }, []);
 
   // Persist catalog to localStorage (and Supabase if configured)
@@ -716,11 +713,11 @@ The invoice has been received and is being processed.
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
     
-    // Also sync to Supabase if configured (debounced to avoid too many requests)
-    if (isSupabaseConfigured() && !isLoadingData && shoots.length > 0) {
+    // Also sync to API if configured (debounced to avoid too many requests)
+    if (API_URL && !isLoadingData && shoots.length > 0) {
       const syncToSupabase = async () => {
         for (const shoot of shoots) {
-          await saveShootToSupabase(shoot);
+          await saveShootToAPI(shoot);
         }
       };
       // Use a small delay to batch updates
@@ -734,9 +731,9 @@ The invoice has been received and is being processed.
     saveToStorage(STORAGE_KEYS.NOTIFICATIONS, notifications);
   }, [notifications]);
 
-  // Helper function to save shoot to Supabase
-  const saveShootToSupabase = async (shoot: Shoot) => {
-    if (!isSupabaseConfigured()) return;
+  // Helper function to save shoot to API
+  const saveShootToAPI = async (shoot: Shoot) => {
+    if (!API_URL) return;
     
     const dbShoot = {
       id: shoot.id,
@@ -765,12 +762,14 @@ The invoice has been received and is being processed.
       total_shoots_in_request: shoot.totalShootsInRequest,
     };
 
-    const { error } = await supabase
-      .from('shoots')
-      .upsert([dbShoot], { onConflict: 'id' });
-
-    if (error) {
-      console.error('Error saving shoot to Supabase:', error);
+    try {
+      await fetch(`${API_URL}/api/shoots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbShoot),
+      });
+    } catch (error) {
+      console.error('Error saving shoot to API:', error);
     }
   };
 
@@ -1115,7 +1114,7 @@ The invoice has been received and is being processed.
 
       // Save all shoots to Supabase
       for (const shoot of newShoots) {
-        await saveShootToSupabase(shoot);
+        await saveShootToAPI(shoot);
       }
       
       // Change view
@@ -1157,7 +1156,7 @@ The invoice has been received and is being processed.
     setShoots(prev => [...[newShoot], ...prev]);
     
     // Save to Supabase
-    saveShootToSupabase(newShoot);
+    saveShootToAPI(newShoot);
     
     // Change view first
     setViewMode('dashboard');

@@ -1,49 +1,90 @@
-# ShootFlow Database Setup Guide
+# ShootFlow Database Setup Guide (Railway PostgreSQL)
 
-## Step 1: Create Supabase Account
+## Step 1: Add PostgreSQL Database to Railway
 
-1. Go to [supabase.com](https://supabase.com)
-2. Sign up for a free account
-3. Create a new project (name it "shootflow")
-4. Wait for the project to be ready (~2 minutes)
+1. Go to your **[Railway Dashboard](https://railway.com)**
+2. Open your project
+3. Click **"+ New"** → **"Database"** → **"PostgreSQL"**
+4. Wait for the database to provision (~30 seconds)
 
-## Step 2: Create Database Tables
+## Step 2: Deploy the API Server
 
-1. In your Supabase dashboard, go to **SQL Editor**
-2. Copy the contents of `supabase-schema.sql` file
-3. Paste and run it in the SQL Editor
-4. This will create the `shoots` and `catalog_items` tables
+1. In Railway, click **"+ New"** → **"GitHub Repo"**
+2. Select your `pre-production-poc` repo
+3. **IMPORTANT**: Set the root directory to `server`
+   - Click on the new service
+   - Go to **Settings** → **Build** → **Root Directory**
+   - Set it to: `server`
+4. Railway will auto-deploy the API
 
-## Step 3: Get Your API Keys
+## Step 3: Connect Database to API
 
-1. Go to **Project Settings** > **API**
-2. Copy the **Project URL** (looks like `https://xxxxx.supabase.co`)
-3. Copy the **anon public** key (long string starting with `eyJ...`)
+1. Click on your **API service** in Railway
+2. Go to **Variables** tab
+3. Click **"Add Variable Reference"**
+4. Select your PostgreSQL database
+5. Add the `DATABASE_URL` variable
 
-## Step 4: Add Environment Variables to Railway
+## Step 4: Get the API URL
 
-1. Go to your Railway project dashboard
-2. Click on your service
-3. Go to **Variables** tab
-4. Add these two variables:
+1. Click on your **API service**
+2. Go to **Settings** → **Networking** → **Generate Domain**
+3. Copy the generated URL (e.g., `https://shootflow-api-production.up.railway.app`)
+
+## Step 5: Configure Frontend
+
+1. Click on your **Frontend service** (the main app)
+2. Go to **Variables** tab
+3. Add this variable:
 
 ```
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
+VITE_API_URL=https://your-api-service.up.railway.app
 ```
 
-5. Railway will automatically redeploy with the new variables
+Replace with your actual API URL from Step 4.
 
-## Step 5: For Local Development
+## Step 6: Redeploy
 
-Create a `.env` file in your project root:
+Railway will automatically redeploy both services. Wait ~2 minutes.
+
+---
+
+## Architecture
 
 ```
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
+┌─────────────────┐     ┌─────────────────┐
+│   Browser A     │     │   Browser B     │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         └───────────┬───────────┘
+                     │
+         ┌───────────▼───────────┐
+         │  Frontend (Railway)    │
+         │  React + Vite          │
+         └───────────┬───────────┘
+                     │
+         ┌───────────▼───────────┐
+         │  API Server (Railway)  │
+         │  Express + Node.js     │
+         └───────────┬───────────┘
+                     │
+         ┌───────────▼───────────┐
+         │  PostgreSQL (Railway)  │
+         │  Shared Database       │
+         └───────────────────────┘
 ```
 
-## That's it!
+## Troubleshooting
 
-Once configured, all data will be stored in Supabase and shared across all users and devices.
+### API not connecting to database
+- Make sure `DATABASE_URL` variable is set in the API service
+- Check API logs in Railway for connection errors
 
+### Frontend not loading data
+- Make sure `VITE_API_URL` is set correctly
+- Check browser console for CORS errors
+- Verify API is running by visiting `https://your-api-url/api/health`
+
+### Data not syncing
+- Check API logs for errors
+- Verify database tables exist by checking PostgreSQL in Railway
