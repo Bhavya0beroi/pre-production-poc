@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MainDashboard } from './components/MainDashboard';
 import { VendorQuoteForm } from './components/VendorQuoteForm';
 import { ApprovalScreen } from './components/ApprovalScreen';
@@ -11,6 +11,7 @@ import { NotificationToast, EmailThreadModal, EmailSentModal, type Notification,
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
+import { supabase, isSupabaseConfigured, shootsDb, catalogDb } from './lib/supabase';
 
 export type ShootStatus = 
   | 'new_request' 
@@ -615,11 +616,7 @@ The invoice has been received and is being processed.
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(() => 
     loadFromStorage(STORAGE_KEYS.CATALOG, defaultCatalogItems)
   );
-
-  // Persist catalog to localStorage whenever it changes
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.CATALOG, catalogItems);
-  }, [catalogItems]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Default shoots data - empty, users will create their own
   const defaultShoots: Shoot[] = [];
@@ -629,15 +626,153 @@ The invoice has been received and is being processed.
     loadFromStorage(STORAGE_KEYS.SHOOTS, defaultShoots)
   );
 
-  // Persist shoots to localStorage whenever they change
+  // Load data from Supabase on mount (if configured)
+  useEffect(() => {
+    const loadDataFromSupabase = async () => {
+      if (!isSupabaseConfigured()) {
+        console.log('Supabase not configured, using localStorage');
+        setIsLoadingData(false);
+        return;
+      }
+
+      try {
+        console.log('Loading data from Supabase...');
+        
+        // Load shoots from Supabase
+        const { data: shootsData, error: shootsError } = await supabase
+          .from('shoots')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (shootsError) {
+          console.error('Error loading shoots:', shootsError);
+        } else if (shootsData && shootsData.length > 0) {
+          // Convert database format to app format
+          const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            date: s.date,
+            duration: s.duration,
+            location: s.location,
+            equipment: s.equipment || [],
+            status: s.status,
+            requestor: s.requestor,
+            vendorQuote: s.vendor_quote,
+            approved: s.approved,
+            approvedAmount: s.approved_amount,
+            invoiceFile: s.invoice_file,
+            paid: s.paid,
+            rejectionReason: s.rejection_reason,
+            approvalEmail: s.approval_email,
+            cancellationReason: s.cancellation_reason,
+            activities: s.activities || [],
+            emailThreadId: s.email_thread_id,
+            createdAt: s.created_at ? new Date(s.created_at) : undefined,
+            shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
+            requestGroupId: s.request_group_id,
+            isMultiShoot: s.is_multi_shoot,
+            multiShootIndex: s.multi_shoot_index,
+            totalShootsInRequest: s.total_shoots_in_request,
+          }));
+          setShoots(formattedShoots);
+          console.log('Loaded', formattedShoots.length, 'shoots from Supabase');
+        }
+
+        // Load catalog from Supabase
+        const { data: catalogData, error: catalogError } = await supabase
+          .from('catalog_items')
+          .select('*')
+          .order('category', { ascending: true });
+
+        if (catalogError) {
+          console.error('Error loading catalog:', catalogError);
+        } else if (catalogData && catalogData.length > 0) {
+          const formattedCatalog: CatalogItem[] = catalogData.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            dailyRate: c.daily_rate,
+            category: c.category,
+            lastUpdated: c.last_updated,
+          }));
+          setCatalogItems(formattedCatalog);
+          console.log('Loaded', formattedCatalog.length, 'catalog items from Supabase');
+        }
+      } catch (error) {
+        console.error('Error loading data from Supabase:', error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    loadDataFromSupabase();
+  }, []);
+
+  // Persist catalog to localStorage (and Supabase if configured)
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.CATALOG, catalogItems);
+  }, [catalogItems]);
+
+  // Persist shoots to localStorage (and Supabase if configured)
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
-  }, [shoots]);
+    
+    // Also sync to Supabase if configured (debounced to avoid too many requests)
+    if (isSupabaseConfigured() && !isLoadingData && shoots.length > 0) {
+      const syncToSupabase = async () => {
+        for (const shoot of shoots) {
+          await saveShootToSupabase(shoot);
+        }
+      };
+      // Use a small delay to batch updates
+      const timeoutId = setTimeout(syncToSupabase, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [shoots, isLoadingData]);
 
-  // Persist notifications to localStorage whenever they change
+  // Persist notifications to localStorage
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.NOTIFICATIONS, notifications);
   }, [notifications]);
+
+  // Helper function to save shoot to Supabase
+  const saveShootToSupabase = async (shoot: Shoot) => {
+    if (!isSupabaseConfigured()) return;
+    
+    const dbShoot = {
+      id: shoot.id,
+      name: shoot.name,
+      date: shoot.date,
+      duration: shoot.duration,
+      location: shoot.location,
+      equipment: shoot.equipment,
+      status: shoot.status,
+      requestor: shoot.requestor,
+      vendor_quote: shoot.vendorQuote,
+      approved: shoot.approved,
+      approved_amount: shoot.approvedAmount,
+      invoice_file: shoot.invoiceFile,
+      paid: shoot.paid,
+      rejection_reason: shoot.rejectionReason,
+      approval_email: shoot.approvalEmail,
+      cancellation_reason: shoot.cancellationReason,
+      activities: shoot.activities,
+      email_thread_id: shoot.emailThreadId,
+      created_at: shoot.createdAt?.toISOString(),
+      shoot_date: shoot.shootDate?.toISOString(),
+      request_group_id: shoot.requestGroupId,
+      is_multi_shoot: shoot.isMultiShoot,
+      multi_shoot_index: shoot.multiShootIndex,
+      total_shoots_in_request: shoot.totalShootsInRequest,
+    };
+
+    const { error } = await supabase
+      .from('shoots')
+      .upsert([dbShoot], { onConflict: 'id' });
+
+    if (error) {
+      console.error('Error saving shoot to Supabase:', error);
+    }
+  };
 
   // Helper function to parse shoot date and get end date
   const parseShootEndDate = (dateStr: string): Date | null => {
@@ -958,7 +1093,7 @@ The invoice has been received and is being processed.
     };
   };
 
-  const handleCreateRequest = (requestData: any) => {
+  const handleCreateRequest = async (requestData: any) => {
     const baseTimestamp = Date.now();
     
     // Check if this is a batch submission (multiple shoots)
@@ -977,6 +1112,11 @@ The invoice has been received and is being processed.
         console.log('Adding', newShoots.length, 'shoots. Previous count:', prev.length);
         return [...newShoots, ...prev];
       });
+
+      // Save all shoots to Supabase
+      for (const shoot of newShoots) {
+        await saveShootToSupabase(shoot);
+      }
       
       // Change view
       setViewMode('dashboard');
@@ -1015,6 +1155,9 @@ The invoice has been received and is being processed.
     console.log('Creating single shoot:', newShoot.name, 'with groupId:', newShoot.requestGroupId, 'id:', newShoot.id);
     
     setShoots(prev => [...[newShoot], ...prev]);
+    
+    // Save to Supabase
+    saveShootToSupabase(newShoot);
     
     // Change view first
     setViewMode('dashboard');
