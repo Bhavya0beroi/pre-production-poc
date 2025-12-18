@@ -37,11 +37,8 @@ export function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-8">
-          <div 
-            className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg"
-            style={{ backgroundColor: '#2D60FF' }}
-          >
-            <Clapperboard className="w-10 h-10 text-white" />
+          <div className="flex items-center justify-center mx-auto mb-5">
+            <Clapperboard className="w-14 h-14" style={{ color: '#2D60FF' }} />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">ShootFlow</h1>
           <p className="text-gray-400">Streamline your production workflow</p>
@@ -91,11 +88,11 @@ export function LoginPage() {
               />
             </div>
 
-            {/* Submit Button */}
+            {/* Submit Button - matches input field styling */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-14 rounded-xl text-white font-semibold text-base transition-all hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-3 mt-4"
+              className="w-full px-4 py-3 rounded-xl text-white font-semibold text-base transition-all hover:shadow-xl hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100 flex items-center justify-center gap-3 mt-2"
               style={{ 
                 backgroundColor: '#2D60FF',
                 boxShadow: '0 4px 14px 0 rgba(45, 96, 255, 0.4)'
