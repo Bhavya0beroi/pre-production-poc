@@ -43,8 +43,8 @@ export function LoginPage() {
           >
             <Clapperboard className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Pre-Production POC</h1>
-          <p className="text-gray-400">Sign in to manage your shoots</p>
+          <h1 className="text-3xl font-bold text-white mb-2">ShootFlow</h1>
+          <p className="text-gray-400">Streamline your production workflow</p>
         </div>
 
         {/* Login Card */}
@@ -112,7 +112,7 @@ export function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          © 2024 Pre-Production POC. All rights reserved.
+          © 2025 ShootFlow. All rights reserved.
         </p>
       </div>
     </div>

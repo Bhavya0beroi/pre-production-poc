@@ -134,7 +134,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       >
         {/* Logo/Brand */}
         <div className="px-6 py-6 border-b" style={{ borderColor: '#374151' }}>
-          <h2 className="text-white text-xl">Pre-Production POC</h2>
+          <h2 className="text-white text-xl">ShootFlow</h2>
         </div>
 
         {/* Navigation Menu */}

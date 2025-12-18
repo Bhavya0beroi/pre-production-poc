@@ -23,7 +23,7 @@ const USERS: { [email: string]: { password: string; role: UserRole; name: string
   'preproduction@learnapp.com': {
     password: '123456',
     role: 'user',
-    name: 'Pre-Production Team'
+    name: 'ShootFlow Team'
   },
   'admin@learnapp.com': {
     password: '123456',

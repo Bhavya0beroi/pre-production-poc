@@ -308,7 +308,7 @@ function AppContent() {
           const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
           return `Hi ${recipientName},
 
-The Pre-production team has submitted a new equipment requirement.
+The ShootFlow team has submitted a new equipment requirement.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -327,7 +327,7 @@ The Pre-production team has submitted a new equipment requirement.
 ${window.location.origin}
 
 Best regards,
-Pre-Production Team`;
+ShootFlow Team`;
           
         case 'sent_to_vendor':
           return `The equipment request for "${shootName}" has been sent to the vendor.
@@ -621,252 +621,8 @@ The invoice has been received and is being processed.
     saveToStorage(STORAGE_KEYS.CATALOG, catalogItems);
   }, [catalogItems]);
 
-  // Default shoots data
-  const defaultShoots: Shoot[] = [
-    {
-      id: '5',
-      name: 'Web Series Ep 3',
-      date: 'Oct 8-10',
-      duration: '3 Days',
-      location: 'Film City',
-      equipment: [
-        { id: '15', name: 'ARRI Alexa Mini' },
-        { id: '16', name: 'Cinema Lens Set' },
-      ],
-      status: 'pending_invoice',
-      requestor: {
-        name: 'Vikram Singh',
-        avatar: 'VS',
-      },
-      vendorQuote: {
-        amount: 150000,
-        notes: 'Full cinema package',
-      },
-      approved: true,
-      approvedAmount: 150000,
-    },
-    {
-      id: '3',
-      name: 'Music Video',
-      date: 'Oct 20',
-      duration: '1 Day',
-      location: 'Taj Hotel, Mumbai',
-      equipment: [
-        { id: '8', name: 'Sony A7S III x2' },
-        { id: '9', name: 'DJI Ronin RS3' },
-        { id: '10', name: 'LED Light Panels' },
-      ],
-      status: 'with_swati',
-      requestor: {
-        name: 'Amit Kumar',
-        avatar: 'AK',
-      },
-      vendorQuote: {
-        amount: 12500,
-        notes: 'Includes transport and backup batteries',
-      },
-    },
-    {
-      id: '1',
-      name: 'Diwali Ad',
-      date: 'Oct 12-13',
-      duration: '2 Days',
-      location: 'Studio 5, Mumbai',
-      equipment: [
-        { id: '1', name: 'Sony A7S3' },
-        { id: '2', name: '24-70mm GM Lens' },
-        { id: '3', name: 'Aputure 300d' },
-      ],
-      status: 'with_vendor',
-      requestor: {
-        name: 'Rahul Sharma',
-        avatar: 'RS',
-      },
-    },
-    {
-      id: '2',
-      name: 'Fashion Reel',
-      date: 'Oct 15',
-      duration: '1 Day',
-      location: 'Beach Location, Goa',
-      equipment: [
-        { id: '5', name: 'Canon R5' },
-        { id: '6', name: 'Godox LED Panel' },
-      ],
-      status: 'new_request',
-      requestor: {
-        name: 'Priya Desai',
-        avatar: 'PD',
-      },
-    },
-    {
-      id: '4',
-      name: 'Product Shoot',
-      date: 'Oct 20',
-      duration: '1 Day',
-      location: 'White Cyc Studio',
-      equipment: [
-        { id: '12', name: 'Canon R5' },
-        { id: '13', name: 'Macro Lens' },
-      ],
-      status: 'ready_for_shoot',
-      requestor: {
-        name: 'Sneha Patel',
-        avatar: 'SP',
-      },
-      vendorQuote: {
-        amount: 8500,
-        notes: 'Premium equipment package',
-      },
-      approved: true,
-      approvedAmount: 8500,
-    },
-    {
-      id: '7',
-      name: 'Corporate Training Video',
-      date: 'Oct 22',
-      duration: '1 Day',
-      location: 'Office Studio',
-      equipment: [
-        { id: '1', name: 'Sony FX3' },
-      ],
-      status: 'ready_for_shoot',
-      requestor: {
-        name: 'Anish Kumar',
-        avatar: 'AK',
-      },
-      vendorQuote: {
-        amount: 5000,
-        notes: 'Simple setup',
-      },
-      approved: true,
-      approvedAmount: 5000,
-    },
-    {
-      id: '8',
-      name: 'Fashion Magazine Shoot',
-      date: 'Oct 25',
-      duration: '2 Days',
-      location: 'Beach, Goa',
-      equipment: [
-        { id: '3', name: 'Canon R5' },
-      ],
-      status: 'ready_for_shoot',
-      requestor: {
-        name: 'Priya Desai',
-        avatar: 'PD',
-      },
-      vendorQuote: {
-        amount: 15000,
-        notes: 'Location package',
-      },
-      approved: true,
-      approvedAmount: 15000,
-    },
-    {
-      id: '9',
-      name: 'E-commerce Product Shoot',
-      date: 'Oct 28',
-      duration: '1 Day',
-      location: 'Studio 2',
-      equipment: [
-        { id: '3', name: 'Canon R5' },
-      ],
-      status: 'new_request',
-      requestor: {
-        name: 'Rahul Sharma',
-        avatar: 'RS',
-      },
-    },
-    {
-      id: '10',
-      name: 'Social Media Content',
-      date: 'Oct 30',
-      duration: '1 Day',
-      location: 'Multiple Locations',
-      equipment: [
-        { id: '1', name: 'Sony A7S3' },
-      ],
-      status: 'new_request',
-      requestor: {
-        name: 'Sneha Patel',
-        avatar: 'SP',
-      },
-    },
-    {
-      id: '11',
-      name: 'Documentary Series',
-      date: 'Nov 2-5',
-      duration: '4 Days',
-      location: 'Various',
-      equipment: [
-        { id: '4', name: 'ARRI Alexa' },
-      ],
-      status: 'pending_invoice',
-      requestor: {
-        name: 'Vikram Singh',
-        avatar: 'VS',
-      },
-      vendorQuote: {
-        amount: 200000,
-        notes: 'Full production package',
-      },
-      approved: true,
-      approvedAmount: 200000,
-    },
-    {
-      id: '6',
-      name: 'Diwali Ad Campaign',
-      date: 'Sep 25',
-      duration: '1 Day',
-      location: 'Studio 3',
-      equipment: [
-        { id: '1', name: 'Sony FX3' },
-      ],
-      status: 'completed',
-      requestor: {
-        name: 'Anish Kumar',
-        avatar: 'AK',
-      },
-      vendorQuote: {
-        amount: 12500,
-        notes: 'Completed successfully',
-      },
-      approved: true,
-      approvedAmount: 12500,
-      paid: true,
-      invoiceFile: {
-        name: 'invoice_001.pdf',
-        url: '#',
-      },
-    },
-    {
-      id: '12',
-      name: 'Brand Promo Video',
-      date: 'Sep 20',
-      duration: '1 Day',
-      location: 'Studio 1',
-      equipment: [
-        { id: '3', name: 'Canon R5' },
-      ],
-      status: 'completed',
-      requestor: {
-        name: 'Rahul Sharma',
-        avatar: 'RS',
-      },
-      vendorQuote: {
-        amount: 8000,
-        notes: 'Completed',
-      },
-      approved: true,
-      approvedAmount: 8000,
-      paid: true,
-      invoiceFile: {
-        name: 'invoice_002.pdf',
-        url: '#',
-      },
-    },
-  ];
+  // Default shoots data - empty, users will create their own
+  const defaultShoots: Shoot[] = [];
 
   // Load shoots from localStorage, fallback to defaults
   const [shoots, setShoots] = useState<Shoot[]>(() => 
@@ -1239,7 +995,7 @@ The invoice has been received and is being processed.
             dates: dateStr,
             itemCount: requestData.shoots.reduce((sum: number, s: any) => sum + s.equipment.length, 0),
             estimatedBudget: requestData.shoots.reduce((sum: number, s: any) => sum + (s.totalBudget || 0), 0),
-            requestorName: firstShoot.requestorName || 'Pre-Production Team',
+            requestorName: firstShoot.requestorName || 'ShootFlow Team',
             equipmentList: requestData.shoots.flatMap((s: any) => 
               s.equipment.map((item: any) => ({
                 name: `[${s.shootName}] ${item.name}`,
@@ -1276,7 +1032,7 @@ The invoice has been received and is being processed.
           dates: dateStr,
           itemCount: requestData.equipment.length,
           estimatedBudget: requestData.totalBudget || 0,
-          requestorName: requestData.requestorName || 'Pre-Production Team',
+          requestorName: requestData.requestorName || 'ShootFlow Team',
           equipmentList: requestData.equipment.map((item: any) => ({
             name: item.name,
             dailyRate: item.dailyRate || 0,
