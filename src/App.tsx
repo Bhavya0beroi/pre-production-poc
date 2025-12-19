@@ -762,15 +762,23 @@ The invoice has been received and is being processed.
     };
 
     try {
-      await fetch(`${API_URL}/api/shoots`, {
+      console.log('Saving to API:', dbShoot.id, 'status:', dbShoot.status);
+      const response = await fetch(`${API_URL}/api/shoots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dbShoot),
         signal: AbortSignal.timeout(5000), // 5 second timeout
       });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('API save successful:', result.id, 'new status:', result.status);
+      } else {
+        console.error('API save failed with status:', response.status);
+      }
     } catch (error) {
       // API save failed, but localStorage backup is already saved
-      console.log('API save failed, data saved to localStorage');
+      console.error('API save error:', error);
     }
   };
 
