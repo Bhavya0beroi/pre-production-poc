@@ -152,6 +152,9 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
       
       console.log('All quotes submitted successfully!');
       
+      // Show success alert for any mode
+      alert('✅ Quote submitted successfully! The request has been sent for approval.');
+      
       if (isStandalone) {
         console.log('Standalone mode - showing success message');
         setSubmitted(true);

@@ -773,12 +773,15 @@ The invoice has been received and is being processed.
       if (response.ok) {
         const result = await response.json();
         console.log('API save successful:', result.id, 'new status:', result.status);
+        return result;
       } else {
-        console.error('API save failed with status:', response.status);
+        const errorText = await response.text();
+        console.error('API save failed with status:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
       }
     } catch (error) {
-      // API save failed, but localStorage backup is already saved
       console.error('API save error:', error);
+      throw error; // Re-throw so callers can handle it
     }
   };
 
@@ -891,15 +894,20 @@ The invoice has been received and is being processed.
   };
 
   const handleVendorSubmit = async (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
-    console.log('handleVendorSubmit called with shootId:', shootId);
-    console.log('Available shoots:', shoots.map(s => ({ id: s.id, name: s.name })));
+    console.log('=== handleVendorSubmit START ===');
+    console.log('shootId:', shootId);
+    console.log('amount:', amount);
+    console.log('Available shoots count:', shoots.length);
+    console.log('Available shoot IDs:', shoots.map(s => s.id));
     
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) {
-      console.error('Shoot not found for ID:', shootId);
+      console.error('ERROR: Shoot not found for ID:', shootId);
       alert('Error: Could not find shoot data. Please refresh and try again.');
-      return;
+      throw new Error('Shoot not found');
     }
+    
+    console.log('Found shoot:', shoot.name);
     
     // Update equipment with vendor rates if provided
     let updatedEquipment = shoot.equipment;
@@ -910,7 +918,7 @@ The invoice has been received and is being processed.
       });
     }
     
-    console.log('Updating shoot:', shoot.name, 'with amount:', amount);
+    console.log('Updating shoot:', shoot.name, 'to status: with_swati with amount:', amount);
     
     const updatedShoot = { 
       ...shoot, 
@@ -920,7 +928,9 @@ The invoice has been received and is being processed.
     };
     
     // Save to API first
+    console.log('Saving to API...');
     await saveShootToAPI(updatedShoot);
+    console.log('API save completed for:', shoot.name);
     
     // Use functional update to ensure all multi-shoot updates are processed correctly
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
