@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   CheckCircle, 
@@ -85,20 +85,43 @@ export function MainDashboard({
     }
   };
 
-  const getCountForStatus = (status: string) => {
-    return shoots.filter(s => s.status === status).length;
+  // Helper to count unique request groups (multi-shoots count as 1)
+  const getGroupedCountForStatus = (status: string) => {
+    const filtered = shoots.filter(s => s.status === status);
+    const groupIds = new Set<string>();
+    let standaloneCount = 0;
+    
+    filtered.forEach(s => {
+      if (s.requestGroupId) {
+        groupIds.add(s.requestGroupId);
+      } else {
+        standaloneCount++;
+      }
+    });
+    
+    return groupIds.size + standaloneCount;
   };
 
-  const approvalsPending = getCountForStatus('with_swati');
+  const approvalsPending = getGroupedCountForStatus('with_swati');
 
-  // Count all active (non-completed) shoots
-  const allActiveCount = shoots.filter(s => 
+  // Count all active (non-completed) shoots - grouped
+  const allActiveFiltered = shoots.filter(s => 
     s.status === 'pending_invoice' || 
     s.status === 'with_swati' || 
     s.status === 'with_vendor' ||
     s.status === 'new_request' ||
     s.status === 'ready_for_shoot'
-  ).length;
+  );
+  const allActiveGroupIds = new Set<string>();
+  let allActiveStandalone = 0;
+  allActiveFiltered.forEach(s => {
+    if (s.requestGroupId) {
+      allActiveGroupIds.add(s.requestGroupId);
+    } else {
+      allActiveStandalone++;
+    }
+  });
+  const allActiveCount = allActiveGroupIds.size + allActiveStandalone;
 
   const summaryCards = [
     { 
@@ -110,7 +133,7 @@ export function MainDashboard({
     { 
       id: 'new_request' as FilterType, 
       title: 'New Requests', 
-      count: getCountForStatus('new_request'),
+      count: getGroupedCountForStatus('new_request'),
       color: '#2D60FF' 
     },
     { 
@@ -122,46 +145,72 @@ export function MainDashboard({
     { 
       id: 'active_shoots' as FilterType, 
       title: 'Active Shoots', 
-      count: getCountForStatus('ready_for_shoot'),
+      count: getGroupedCountForStatus('ready_for_shoot'),
       color: '#27AE60' 
     },
     { 
       id: 'pending_invoice' as FilterType, 
       title: 'Pending Invoice', 
-      count: getCountForStatus('pending_invoice'),
+      count: getGroupedCountForStatus('pending_invoice'),
       color: '#9B51E0' 
     },
   ];
 
+  // Group shoots by requestGroupId - multi-shoot requests appear as one row
+  const groupShoots = (shootsList: Shoot[]): (Shoot & { groupedShoots?: Shoot[], shootCount?: number })[] => {
+    const grouped: Map<string, Shoot[]> = new Map();
+    const standalone: Shoot[] = [];
+    
+    shootsList.forEach(shoot => {
+      if (shoot.requestGroupId) {
+        const existing = grouped.get(shoot.requestGroupId) || [];
+        existing.push(shoot);
+        grouped.set(shoot.requestGroupId, existing);
+      } else {
+        standalone.push(shoot);
+      }
+    });
+    
+    // Convert grouped shoots to single representative entries
+    const groupedEntries: (Shoot & { groupedShoots?: Shoot[], shootCount?: number })[] = [];
+    grouped.forEach((groupShoots) => {
+      // Use the first shoot as the representative, but include all shoots data
+      const representative = { 
+        ...groupShoots[0], 
+        groupedShoots: groupShoots,
+        shootCount: groupShoots.length 
+      };
+      groupedEntries.push(representative);
+    });
+    
+    // Combine with standalone shoots
+    return [...groupedEntries, ...standalone.map(s => ({ ...s, shootCount: 1 }))];
+  };
+
   // Filter table data based on selected filter
   const getFilteredData = () => {
+    let filtered: Shoot[] = [];
+    
     if (selectedFilter === 'all') {
-      return shoots.filter(s => 
+      filtered = shoots.filter(s => 
         s.status === 'pending_invoice' || 
         s.status === 'with_swati' || 
         s.status === 'with_vendor' ||
         s.status === 'new_request' ||
         s.status === 'ready_for_shoot'
       );
+    } else if (selectedFilter === 'new_request') {
+      filtered = shoots.filter(s => s.status === 'new_request');
+    } else if (selectedFilter === 'approvals_pending') {
+      filtered = shoots.filter(s => s.status === 'with_swati');
+    } else if (selectedFilter === 'active_shoots') {
+      filtered = shoots.filter(s => s.status === 'ready_for_shoot');
+    } else if (selectedFilter === 'pending_invoice') {
+      filtered = shoots.filter(s => s.status === 'pending_invoice');
     }
     
-    if (selectedFilter === 'new_request') {
-      return shoots.filter(s => s.status === 'new_request');
-    }
-    
-    if (selectedFilter === 'approvals_pending') {
-      return shoots.filter(s => s.status === 'with_swati');
-    }
-    
-    if (selectedFilter === 'active_shoots') {
-      return shoots.filter(s => s.status === 'ready_for_shoot');
-    }
-    
-    if (selectedFilter === 'pending_invoice') {
-      return shoots.filter(s => s.status === 'pending_invoice');
-    }
-    
-    return [];
+    // Group multi-shoot requests
+    return groupShoots(filtered);
   };
 
   const tableData = getFilteredData();
@@ -462,11 +511,20 @@ export function MainDashboard({
                 <tbody className="divide-y divide-gray-200">
                   {tableData.map((shoot) => {
                     const badge = getStatusBadge(shoot.status);
+                    const shootCount = (shoot as any).shootCount || 1;
+                    const isGrouped = shootCount > 1;
                     
                     return (
                       <tr key={shoot.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="text-gray-900">{shoot.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-900">{shoot.name}</span>
+                            {isGrouped && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 font-medium">
+                                +{shootCount - 1} more
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-500">{shoot.location}</div>
                         </td>
                         {selectedFilter === 'approvals_pending' && (
