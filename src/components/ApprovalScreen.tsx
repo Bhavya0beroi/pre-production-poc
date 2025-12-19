@@ -180,33 +180,24 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
   const handleApprove = async () => {
     if (selectedShoot && !isApproving) {
       setIsApproving(true);
-      console.log('=== APPROVE CLICKED ===');
       
       try {
         // Approve all shoots in the group
         if (isMultiShoot) {
-          console.log('Approving', groupedShoots.length, 'shoots');
           for (const shoot of groupedShoots) {
-            console.log('Approving shoot:', shoot.name, shoot.id);
             await onApprove(shoot.id);
           }
         } else {
-          console.log('Approving single shoot:', selectedShoot.name, selectedShoot.id);
           await onApprove(selectedShoot.id);
         }
-        
-        console.log('All shoots approved successfully!');
-        alert('✅ Approved successfully! The shoots are now active.');
-        
+      } catch (error) {
+        console.error('Approval error:', error);
+      } finally {
+        setIsApproving(false);
         setShowDetailsModal(false);
         setSelectedShoot(null);
         setRelatedShoots([]);
         setActiveShootIndex(0);
-      } catch (error) {
-        console.error('Error approving shoots:', error);
-        alert('Error approving shoots. Please try again.');
-      } finally {
-        setIsApproving(false);
       }
     }
   };

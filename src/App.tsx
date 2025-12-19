@@ -894,20 +894,11 @@ The invoice has been received and is being processed.
   };
 
   const handleVendorSubmit = async (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
-    console.log('=== handleVendorSubmit START ===');
-    console.log('shootId:', shootId);
-    console.log('amount:', amount);
-    console.log('Available shoots count:', shoots.length);
-    console.log('Available shoot IDs:', shoots.map(s => s.id));
-    
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) {
-      console.error('ERROR: Shoot not found for ID:', shootId);
-      alert('Error: Could not find shoot data. Please refresh and try again.');
+      console.error('Shoot not found:', shootId);
       throw new Error('Shoot not found');
     }
-    
-    console.log('Found shoot:', shoot.name);
     
     // Update equipment with vendor rates if provided
     let updatedEquipment = shoot.equipment;
@@ -918,8 +909,6 @@ The invoice has been received and is being processed.
       });
     }
     
-    console.log('Updating shoot:', shoot.name, 'to status: with_swati with amount:', amount);
-    
     const updatedShoot = { 
       ...shoot, 
       status: 'with_swati' as ShootStatus,
@@ -927,13 +916,15 @@ The invoice has been received and is being processed.
       vendorQuote: { amount, notes }
     };
     
-    // Save to API first
-    console.log('Saving to API...');
-    await saveShootToAPI(updatedShoot);
-    console.log('API save completed for:', shoot.name);
-    
-    // Use functional update to ensure all multi-shoot updates are processed correctly
+    // Update local state first for immediate UI feedback
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    
+    // Then save to API (don't block on this)
+    try {
+      await saveShootToAPI(updatedShoot);
+    } catch (error) {
+      console.error('API save failed, data saved locally:', error);
+    }
     
     // Trigger simulated email notification
     triggerEmail(
@@ -969,15 +960,11 @@ The invoice has been received and is being processed.
   };
 
   const handleApprove = async (shootId: string) => {
-    console.log('=== handleApprove START ===', shootId);
-    
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) {
-      console.error('Shoot not found for approval:', shootId);
+      console.error('Shoot not found:', shootId);
       throw new Error('Shoot not found');
     }
-    
-    console.log('Approving shoot:', shoot.name);
     
     const updatedShoot = { 
       ...shoot, 
@@ -986,14 +973,15 @@ The invoice has been received and is being processed.
       approvedAmount: shoot.vendorQuote?.amount
     };
     
-    // Save to API first
-    console.log('Saving approved shoot to API...');
-    await saveShootToAPI(updatedShoot);
-    console.log('API save completed');
-    
-    // Use functional update for multi-shoot support
+    // Update local state first for immediate UI feedback
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-    console.log('Local state updated');
+    
+    // Then save to API
+    try {
+      await saveShootToAPI(updatedShoot);
+    } catch (error) {
+      console.error('API save failed:', error);
+    }
     
     // Trigger email that quote has been approved
     triggerEmail(
@@ -1012,15 +1000,11 @@ The invoice has been received and is being processed.
   };
 
   const handleReject = async (shootId: string, reason: string) => {
-    console.log('=== handleReject START ===', shootId);
-    
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) {
-      console.error('Shoot not found for rejection:', shootId);
+      console.error('Shoot not found:', shootId);
       throw new Error('Shoot not found');
     }
-    
-    console.log('Rejecting shoot:', shoot.name, 'reason:', reason);
     
     const updatedShoot = { 
       ...shoot, 
@@ -1029,14 +1013,15 @@ The invoice has been received and is being processed.
       vendorQuote: undefined
     };
     
-    // Save to API first
-    console.log('Saving rejected shoot to API...');
-    await saveShootToAPI(updatedShoot);
-    console.log('API save completed');
-    
-    // Use functional update for multi-shoot support
+    // Update local state first for immediate UI feedback
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-    console.log('Local state updated');
+    
+    // Then save to API
+    try {
+      await saveShootToAPI(updatedShoot);
+    } catch (error) {
+      console.error('API save failed:', error);
+    }
     
     addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };

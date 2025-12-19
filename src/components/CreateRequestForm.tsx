@@ -54,6 +54,9 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
   // Search and category states
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  
+  // Prevent double submission
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get current active shoot
   const activeShoot = shoots[activeShootIndex];
@@ -250,6 +253,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     
     // Generate a unique request group ID for multi-shoot requests
     const requestGroupId = shoots.length > 1 ? `group-${Date.now()}` : undefined;
@@ -1023,11 +1030,18 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
           {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={!isFormValid()}
-            className="px-6 py-2.5 rounded-lg text-white transition-all disabled:opacity-50 font-medium hover:opacity-90"
+            disabled={!isFormValid() || isSubmitting}
+            className="px-6 py-2.5 rounded-lg text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium hover:opacity-90"
             style={{ backgroundColor: '#2D60FF' }}
           >
-            {shoots.length > 1 ? `Submit ${shoots.length} Shoots` : 'Submit Request'}
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Submitting...
+              </span>
+            ) : (
+              shoots.length > 1 ? `Submit ${shoots.length} Shoots` : 'Submit Request'
+            )}
           </button>
         </div>
       </div>
