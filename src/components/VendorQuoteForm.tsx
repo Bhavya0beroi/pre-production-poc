@@ -5,7 +5,7 @@ import type { Shoot } from '../App';
 interface VendorQuoteFormProps {
   shoot: Shoot;
   relatedShoots?: Shoot[]; // Other shoots in the same request group
-  onSubmit: (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => void;
+  onSubmit: (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => Promise<void> | void;
   onBack?: () => void;
   isStandalone?: boolean;
 }
@@ -109,31 +109,47 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (shootQuotes.length === 0) {
+      alert('No shoot data available. Please refresh and try again.');
+      return;
+    }
+    
+    setIsSubmitting(true);
     console.log('VendorQuoteForm handleSubmit - Submitting', shootQuotes.length, 'quotes');
     
-    // Submit each shoot's quote
-    shootQuotes.forEach((quote, index) => {
-      const itemizedPrices = quote.items.map(item => ({
-        id: item.id,
-        vendorRate: item.vendorRate
-      }));
-      const shootTotal = quote.items.reduce((sum, item) => sum + item.vendorRate, 0);
+    try {
+      // Submit each shoot's quote sequentially
+      for (let index = 0; index < shootQuotes.length; index++) {
+        const quote = shootQuotes[index];
+        const itemizedPrices = quote.items.map(item => ({
+          id: item.id,
+          vendorRate: item.vendorRate
+        }));
+        const shootTotal = quote.items.reduce((sum, item) => sum + item.vendorRate, 0);
+        
+        console.log(`  Submitting quote ${index + 1}:`, {
+          shootId: quote.shootId,
+          shootName: quote.shootName,
+          total: shootTotal,
+          itemCount: quote.items.length
+        });
+        
+        await onSubmit(quote.shootId, shootTotal, globalNotes, itemizedPrices);
+      }
       
-      console.log(`  Submitting quote ${index + 1}:`, {
-        shootId: quote.shootId,
-        shootName: quote.shootName,
-        total: shootTotal,
-        itemCount: quote.items.length
-      });
-      
-      onSubmit(quote.shootId, shootTotal, globalNotes, itemizedPrices);
-    });
-    
-    if (isStandalone) {
-      setSubmitted(true);
+      if (isStandalone) {
+        setSubmitted(true);
+      }
+    } catch (error) {
+      console.error('Error submitting quotes:', error);
+      alert('Error submitting quote. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -428,10 +444,16 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
             <div className="px-6 py-4 border-t border-gray-200 bg-white sticky bottom-0">
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-lg text-white transition-all font-medium hover:opacity-90"
+                disabled={isSubmitting}
+                className="w-full py-2.5 rounded-lg text-white transition-all font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#2D60FF' }}
               >
-                {isMultiShoot 
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    Submitting...
+                  </span>
+                ) : isMultiShoot 
                   ? `Submit Quote for ${allShoots.length} Shoots (₹${calculateGrandTotal().toLocaleString()})`
                   : 'Submit Final Quote'
                 }

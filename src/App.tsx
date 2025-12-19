@@ -883,8 +883,15 @@ The invoice has been received and is being processed.
   };
 
   const handleVendorSubmit = async (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
+    console.log('handleVendorSubmit called with shootId:', shootId);
+    console.log('Available shoots:', shoots.map(s => ({ id: s.id, name: s.name })));
+    
     const shoot = shoots.find(s => s.id === shootId);
-    if (!shoot) return;
+    if (!shoot) {
+      console.error('Shoot not found for ID:', shootId);
+      alert('Error: Could not find shoot data. Please refresh and try again.');
+      return;
+    }
     
     // Update equipment with vendor rates if provided
     let updatedEquipment = shoot.equipment;
