@@ -54,6 +54,9 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
   console.log('VendorQuoteForm render - relatedShoots count:', relatedShoots.length);
   console.log('VendorQuoteForm render - allShoots count:', allShoots.length, allShoots.map(s => s.name));
 
+  // Create a stable key for the shoots that changes when shoot data actually changes
+  const shootsKey = allShoots.map(s => `${s.id}:${s.name}:${s.equipment.length}`).join('|');
+
   // Initialize quote data for all shoots
   useEffect(() => {
     console.log('VendorQuoteForm useEffect - Initializing for', allShoots.length, 'shoots');
@@ -62,9 +65,9 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
       console.log('  - Initializing shoot:', s.name, 'with', s.equipment.length, 'items');
       return {
         shootId: s.id,
-        shootName: s.name,
-        date: s.date,
-        location: s.location,
+        shootName: s.name || `Shoot`,
+        date: s.date || '',
+        location: s.location || '',
         items: s.equipment.map((eq, index) => ({
           id: eq.id || `item-${index}`,
           name: eq.name,
@@ -78,7 +81,7 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
     
     console.log('VendorQuoteForm useEffect - Setting shootQuotes with', initialQuotes.length, 'quotes');
     setShootQuotes(initialQuotes);
-  }, [allShoots]);
+  }, [shootsKey]); // Use shootsKey to detect actual data changes
 
   const updateItem = (shootIndex: number, itemId: string, value: number) => {
     setShootQuotes(quotes => 
