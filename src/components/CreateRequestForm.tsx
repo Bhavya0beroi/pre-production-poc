@@ -686,7 +686,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                   }}
                                   className={`w-10 h-10 text-sm rounded-full transition-all flex items-center justify-center ${
                                     isDisabled 
-                                      ? 'text-gray-300 cursor-not-allowed' 
+                                      ? 'text-gray-300 cursor-not-allowed opacity-50' 
                                       : isSelected
                                         ? 'bg-violet-500 text-white font-medium'
                                         : isToday
@@ -819,7 +819,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                   }}
                                   className={`w-10 h-10 text-sm rounded-full transition-all flex items-center justify-center ${
                                     isDisabled 
-                                      ? 'text-gray-300 cursor-not-allowed' 
+                                      ? 'text-gray-300 cursor-not-allowed opacity-50' 
                                       : isSelected
                                         ? 'bg-violet-500 text-white font-medium'
                                         : isToday

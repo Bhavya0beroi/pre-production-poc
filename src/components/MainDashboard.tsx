@@ -245,7 +245,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenInvoice(shoot.id)}
-          className="px-5 py-2.5 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm font-medium hover:bg-orange-50"
+          className="px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm font-medium hover:bg-orange-50 whitespace-nowrap"
           style={{ borderColor: '#F2994A', color: '#F2994A' }}
         >
           <Upload className="w-4 h-4" />
@@ -258,7 +258,7 @@ export function MainDashboard({
       return (
         <button
           onClick={onOpenApprovals}
-          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Review for Approval
@@ -270,7 +270,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenVendorLink(shoot.id)}
-          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Send to Vendor
@@ -282,7 +282,7 @@ export function MainDashboard({
       return (
         <button
           onClick={() => onOpenVendorLink(shoot.id)}
-          className="px-5 py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90"
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
           Send to Vendor
@@ -293,11 +293,11 @@ export function MainDashboard({
     if (shoot.status === 'ready_for_shoot') {
       return (
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium" style={{ color: '#27AE60' }}>Active Shoot</span>
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap" style={{ backgroundColor: '#E8F5E9', color: '#27AE60' }}>Active Shoot</span>
           {isAdmin && onEditShoot && (
             <button
               onClick={() => onEditShoot(shoot.id)}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-1 text-sm"
+              className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-1 text-sm whitespace-nowrap"
               title="Edit shoot (Admin only)"
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -493,19 +493,19 @@ export function MainDashboard({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm text-gray-700">Shoot Name</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[30%]">Shoot Name</th>
                     {selectedFilter === 'approvals_pending' && (
-                      <th className="px-6 py-3 text-left text-sm text-gray-700">Vendor</th>
+                      <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[15%]">Vendor</th>
                     )}
-                    <th className="px-6 py-3 text-left text-sm text-gray-700">Dates</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[18%]">Dates</th>
                     {selectedFilter === 'approvals_pending' && (
-                      <th className="px-6 py-3 text-left text-sm text-gray-700">Total Quote</th>
+                      <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[12%]">Total Quote</th>
                     )}
-                    <th className="px-6 py-3 text-left text-sm text-gray-700">Status</th>
-                    <th className="px-6 py-3 text-left text-sm text-gray-700">Action</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[15%]">Status</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[22%]">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -538,14 +538,16 @@ export function MainDashboard({
                         )}
                         <td className="px-6 py-4">
                           <span 
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs"
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap"
                             style={{ backgroundColor: badge.bg, color: badge.color }}
                           >
                             {badge.label}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          {getActionButton(shoot)}
+                          <div className="flex items-center">
+                            {getActionButton(shoot)}
+                          </div>
                         </td>
                       </tr>
                     );
