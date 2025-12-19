@@ -907,35 +907,31 @@ The invoice has been received and is being processed.
     // Use functional update to ensure all multi-shoot updates are processed correctly
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-    const shoot = shoots.find(s => s.id === shootId);
+    // Trigger simulated email notification
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'quote_submitted', 
+      shoot.requestor.email || 'anish@company.com',
+      {
+        quoteAmount: amount,
+      }
+    );
     
-    if (shoot) {
-      // Trigger simulated email notification
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'quote_submitted', 
-        shoot.requestor.email || 'anish@company.com',
-        {
-          quoteAmount: amount,
-        }
-      );
-      
-      // Send REAL email for quote submission (in same thread)
-      const recipientEmail = shoot.approvalEmail || shoot.requestor.email || 'anish@company.com';
-      const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
-      sendQuoteSubmittedEmail(
-        recipientEmail,
-        recipientName,
-        shoot.name,
-        shoot.date,
-        amount,
-        shootId,
-        shoot.equipment || []
-      );
-      
-      addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
-    }
+    // Send REAL email for quote submission (in same thread)
+    const recipientEmail = shoot.approvalEmail || shoot.requestor.email || 'anish@company.com';
+    const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
+    sendQuoteSubmittedEmail(
+      recipientEmail,
+      recipientName,
+      shoot.name,
+      shoot.date,
+      amount,
+      shootId,
+      shoot.equipment || []
+    );
+    
+    addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
     
     setViewMode('dashboard');
   };
