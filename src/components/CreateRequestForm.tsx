@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, ChevronDown, Calendar, Search, Plus, Camera, Trash2, Check, Aperture, Sun, Mic, Video, Clapperboard, Package, Truck, Users, Lightbulb, Monitor, HardDrive, Headphones, Radio, Zap, CheckCircle, AlertTriangle, AlertOctagon, Copy, Lock } from 'lucide-react';
 import type { CatalogItem } from './EquipmentCatalogManager';
 
@@ -57,6 +57,25 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
   
   // Prevent double submission
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Refs for click-outside detection
+  const startCalendarRef = useRef<HTMLDivElement>(null);
+  const endCalendarRef = useRef<HTMLDivElement>(null);
+  
+  // Click outside to close calendars
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target as Node)) {
+        setShowStartCalendar(false);
+      }
+      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target as Node)) {
+        setShowEndCalendar(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Get current active shoot
   const activeShoot = shoots[activeShootIndex];
@@ -553,7 +572,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                   )}
                   
                   {/* Start Date */}
-                  <div className="relative">
+                  <div className="relative" ref={startCalendarRef}>
                     <label className="block text-xs text-gray-500 mb-1">Start Date</label>
                       <button
                         type="button"
@@ -587,47 +606,54 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                       </button>
 
                     {showStartCalendar && (
-                      <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 w-72">
-                        <div className="flex items-center justify-between mb-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (canNavigatePrev(startCalendarMonth)) {
-                                if (startCalendarMonth.month === 0) {
-                                  setStartCalendarMonth({ month: 11, year: startCalendarMonth.year - 1 });
-                                } else {
-                                  setStartCalendarMonth({ ...startCalendarMonth, month: startCalendarMonth.month - 1 });
+                      <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50" style={{ width: '340px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold text-gray-900">
+                              {monthNames[startCalendarMonth.month]}
+                            </span>
+                            <span className="text-lg text-gray-400">
+                              {startCalendarMonth.year}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (canNavigatePrev(startCalendarMonth)) {
+                                  if (startCalendarMonth.month === 0) {
+                                    setStartCalendarMonth({ month: 11, year: startCalendarMonth.year - 1 });
+                                  } else {
+                                    setStartCalendarMonth({ ...startCalendarMonth, month: startCalendarMonth.month - 1 });
+                                  }
                                 }
-                              }
-                            }}
-                            className={`p-1 rounded transition-colors ${canNavigatePrev(startCalendarMonth) ? 'hover:bg-gray-100' : 'opacity-30 cursor-not-allowed'}`}
-                            disabled={!canNavigatePrev(startCalendarMonth)}
-                          >
-                            <ChevronLeft className="w-5 h-5" />
-                          </button>
-                          <span className="font-medium text-gray-900">
-                            {monthNames[startCalendarMonth.month]} {startCalendarMonth.year}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (startCalendarMonth.month === 11) {
-                                setStartCalendarMonth({ month: 0, year: startCalendarMonth.year + 1 });
-                              } else {
-                                setStartCalendarMonth({ ...startCalendarMonth, month: startCalendarMonth.month + 1 });
-                              }
-                            }}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <ChevronRight className="w-5 h-5" />
-                          </button>
+                              }}
+                              className={`p-1.5 rounded-lg transition-colors ${canNavigatePrev(startCalendarMonth) ? 'hover:bg-gray-100' : 'opacity-30 cursor-not-allowed'}`}
+                              disabled={!canNavigatePrev(startCalendarMonth)}
+                            >
+                              <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (startCalendarMonth.month === 11) {
+                                  setStartCalendarMonth({ month: 0, year: startCalendarMonth.year + 1 });
+                                } else {
+                                  setStartCalendarMonth({ ...startCalendarMonth, month: startCalendarMonth.month + 1 });
+                                }
+                              }}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-7 gap-1 mb-2">
-                          {dayNames.map(day => (
-                            <div key={day} className="text-center text-xs text-gray-500 py-1">{day}</div>
+                        <div className="grid grid-cols-7 gap-0 mb-2">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                            <div key={day} className="text-center text-sm font-medium text-gray-400 py-2">{day}</div>
                           ))}
                         </div>
-                        <div className="grid grid-cols-7 gap-1">
+                        <div className="grid grid-cols-7 gap-0">
                           {(() => {
                             const { daysInMonth, startingDayOfWeek } = generateCalendar(startCalendarMonth.month, startCalendarMonth.year);
                             const days: React.ReactNode[] = [];
@@ -643,34 +669,34 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                              startCalendarMonth.month === currentMonth && 
                                              startCalendarMonth.year === currentYear;
                               days.push(
-                              <button
+                                <button
                                   key={day}
-                                type="button"
+                                  type="button"
                                   disabled={isDisabled}
-                                onClick={() => {
+                                  onClick={() => {
                                     updateActiveShoot('selectedStartDate', { day, month: startCalendarMonth.month, year: startCalendarMonth.year });
                                     if (activeShoot.selectedEndDate) {
                                       const newStartTimestamp = new Date(startCalendarMonth.year, startCalendarMonth.month, day).getTime();
                                       const endTimestamp = dateToTimestamp(activeShoot.selectedEndDate);
                                       if (newStartTimestamp > endTimestamp) {
                                         updateActiveShoot('selectedEndDate', null);
+                                      }
                                     }
-                                  }
-                                  setShowStartCalendar(false);
-                                }}
-                                  className={`w-9 h-9 text-sm rounded-full transition-all flex items-center justify-center font-medium ${
+                                    setShowStartCalendar(false);
+                                  }}
+                                  className={`w-10 h-10 text-sm rounded-full transition-all flex items-center justify-center ${
                                     isDisabled 
-                                      ? 'text-gray-200 cursor-not-allowed line-through' 
+                                      ? 'text-gray-300 cursor-not-allowed' 
                                       : isSelected
-                                        ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
+                                        ? 'bg-violet-500 text-white font-medium'
                                         : isToday
-                                          ? 'bg-gray-200 text-gray-900 font-bold'
-                                          : 'hover:bg-blue-50 text-gray-900'
+                                          ? 'border-2 border-violet-300 text-gray-900 font-medium'
+                                          : 'hover:bg-gray-100 text-gray-700'
                                   }`}
-                              >
-                                {day}
-                              </button>
-                            );
+                                >
+                                  {day}
+                                </button>
+                              );
                             }
                             return days;
                           })()}
@@ -680,7 +706,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                   </div>
 
                   {/* End Date */}
-                  <div className="relative">
+                  <div className="relative" ref={endCalendarRef}>
                     <label className="block text-xs text-gray-500 mb-1">End Date</label>
                       <button
                         type="button"
@@ -720,47 +746,54 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                       </button>
 
                     {showEndCalendar && (
-                      <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 w-72">
-                        <div className="flex items-center justify-between mb-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (canNavigatePrev(endCalendarMonth)) {
-                                if (endCalendarMonth.month === 0) {
-                                  setEndCalendarMonth({ month: 11, year: endCalendarMonth.year - 1 });
-                                } else {
-                                  setEndCalendarMonth({ ...endCalendarMonth, month: endCalendarMonth.month - 1 });
+                      <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50" style={{ width: '340px' }}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold text-gray-900">
+                              {monthNames[endCalendarMonth.month]}
+                            </span>
+                            <span className="text-lg text-gray-400">
+                              {endCalendarMonth.year}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (canNavigatePrev(endCalendarMonth)) {
+                                  if (endCalendarMonth.month === 0) {
+                                    setEndCalendarMonth({ month: 11, year: endCalendarMonth.year - 1 });
+                                  } else {
+                                    setEndCalendarMonth({ ...endCalendarMonth, month: endCalendarMonth.month - 1 });
+                                  }
                                 }
-                              }
-                            }}
-                            className={`p-1 rounded transition-colors ${canNavigatePrev(endCalendarMonth) ? 'hover:bg-gray-100' : 'opacity-30 cursor-not-allowed'}`}
-                            disabled={!canNavigatePrev(endCalendarMonth)}
-                          >
-                            <ChevronLeft className="w-5 h-5" />
-                          </button>
-                          <span className="font-medium text-gray-900">
-                            {monthNames[endCalendarMonth.month]} {endCalendarMonth.year}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (endCalendarMonth.month === 11) {
-                                setEndCalendarMonth({ month: 0, year: endCalendarMonth.year + 1 });
-                              } else {
-                                setEndCalendarMonth({ ...endCalendarMonth, month: endCalendarMonth.month + 1 });
-                              }
-                            }}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <ChevronRight className="w-5 h-5" />
-                          </button>
+                              }}
+                              className={`p-1.5 rounded-lg transition-colors ${canNavigatePrev(endCalendarMonth) ? 'hover:bg-gray-100' : 'opacity-30 cursor-not-allowed'}`}
+                              disabled={!canNavigatePrev(endCalendarMonth)}
+                            >
+                              <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (endCalendarMonth.month === 11) {
+                                  setEndCalendarMonth({ month: 0, year: endCalendarMonth.year + 1 });
+                                } else {
+                                  setEndCalendarMonth({ ...endCalendarMonth, month: endCalendarMonth.month + 1 });
+                                }
+                              }}
+                              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-7 gap-1 mb-2">
-                          {dayNames.map(day => (
-                            <div key={day} className="text-center text-xs text-gray-500 py-1">{day}</div>
+                        <div className="grid grid-cols-7 gap-0 mb-2">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                            <div key={day} className="text-center text-sm font-medium text-gray-400 py-2">{day}</div>
                           ))}
                         </div>
-                        <div className="grid grid-cols-7 gap-1">
+                        <div className="grid grid-cols-7 gap-0">
                           {(() => {
                             const { daysInMonth, startingDayOfWeek } = generateCalendar(endCalendarMonth.month, endCalendarMonth.year);
                             const days: React.ReactNode[] = [];
@@ -776,27 +809,27 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                                              endCalendarMonth.month === currentMonth && 
                                              endCalendarMonth.year === currentYear;
                               days.push(
-                              <button
+                                <button
                                   key={day}
-                                type="button"
-                                disabled={isDisabled}
-                                onClick={() => {
+                                  type="button"
+                                  disabled={isDisabled}
+                                  onClick={() => {
                                     updateActiveShoot('selectedEndDate', { day, month: endCalendarMonth.month, year: endCalendarMonth.year });
                                     setShowEndCalendar(false);
                                   }}
-                                  className={`w-9 h-9 text-sm rounded-full transition-all flex items-center justify-center font-medium ${
+                                  className={`w-10 h-10 text-sm rounded-full transition-all flex items-center justify-center ${
                                     isDisabled 
-                                      ? 'text-gray-200 cursor-not-allowed line-through' 
+                                      ? 'text-gray-300 cursor-not-allowed' 
                                       : isSelected
-                                        ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-600 ring-offset-2'
+                                        ? 'bg-violet-500 text-white font-medium'
                                         : isToday
-                                          ? 'bg-gray-200 text-gray-900 font-bold'
-                                          : 'hover:bg-blue-50 text-gray-900'
+                                          ? 'border-2 border-violet-300 text-gray-900 font-medium'
+                                          : 'hover:bg-gray-100 text-gray-700'
                                   }`}
-                              >
-                                {day}
-                              </button>
-                            );
+                                >
+                                  {day}
+                                </button>
+                              );
                             }
                             return days;
                           })()}
