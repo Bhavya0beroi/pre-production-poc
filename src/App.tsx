@@ -969,8 +969,15 @@ The invoice has been received and is being processed.
   };
 
   const handleApprove = async (shootId: string) => {
+    console.log('=== handleApprove START ===', shootId);
+    
     const shoot = shoots.find(s => s.id === shootId);
-    if (!shoot) return;
+    if (!shoot) {
+      console.error('Shoot not found for approval:', shootId);
+      throw new Error('Shoot not found');
+    }
+    
+    console.log('Approving shoot:', shoot.name);
     
     const updatedShoot = { 
       ...shoot, 
@@ -980,10 +987,13 @@ The invoice has been received and is being processed.
     };
     
     // Save to API first
+    console.log('Saving approved shoot to API...');
     await saveShootToAPI(updatedShoot);
+    console.log('API save completed');
     
     // Use functional update for multi-shoot support
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    console.log('Local state updated');
     
     // Trigger email that quote has been approved
     triggerEmail(
@@ -1002,8 +1012,15 @@ The invoice has been received and is being processed.
   };
 
   const handleReject = async (shootId: string, reason: string) => {
+    console.log('=== handleReject START ===', shootId);
+    
     const shoot = shoots.find(s => s.id === shootId);
-    if (!shoot) return;
+    if (!shoot) {
+      console.error('Shoot not found for rejection:', shootId);
+      throw new Error('Shoot not found');
+    }
+    
+    console.log('Rejecting shoot:', shoot.name, 'reason:', reason);
     
     const updatedShoot = { 
       ...shoot, 
@@ -1013,10 +1030,13 @@ The invoice has been received and is being processed.
     };
     
     // Save to API first
+    console.log('Saving rejected shoot to API...');
     await saveShootToAPI(updatedShoot);
+    console.log('API save completed');
     
     // Use functional update for multi-shoot support
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    console.log('Local state updated');
     
     addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };

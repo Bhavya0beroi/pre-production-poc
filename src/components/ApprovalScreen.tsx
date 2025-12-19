@@ -18,8 +18,8 @@ import { useAuth } from '../context/AuthContext';
 interface ApprovalScreenProps {
   shoots: Shoot[];
   allShoots: Shoot[];
-  onApprove: (shootId: string) => void;
-  onReject: (shootId: string, reason: string) => void;
+  onApprove: (shootId: string) => Promise<void> | void;
+  onReject: (shootId: string, reason: string) => Promise<void> | void;
   onBack: () => void;
   onOpenFinance: () => void;
   onOpenCatalog: () => void;
@@ -175,20 +175,39 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
     }
   };
 
-  const handleApprove = () => {
-    if (selectedShoot) {
-      // Approve all shoots in the group
-      if (isMultiShoot) {
-        groupedShoots.forEach(shoot => {
-          onApprove(shoot.id);
-        });
-      } else {
-      onApprove(selectedShoot.id);
+  const [isApproving, setIsApproving] = useState(false);
+  
+  const handleApprove = async () => {
+    if (selectedShoot && !isApproving) {
+      setIsApproving(true);
+      console.log('=== APPROVE CLICKED ===');
+      
+      try {
+        // Approve all shoots in the group
+        if (isMultiShoot) {
+          console.log('Approving', groupedShoots.length, 'shoots');
+          for (const shoot of groupedShoots) {
+            console.log('Approving shoot:', shoot.name, shoot.id);
+            await onApprove(shoot.id);
+          }
+        } else {
+          console.log('Approving single shoot:', selectedShoot.name, selectedShoot.id);
+          await onApprove(selectedShoot.id);
+        }
+        
+        console.log('All shoots approved successfully!');
+        alert('✅ Approved successfully! The shoots are now active.');
+        
+        setShowDetailsModal(false);
+        setSelectedShoot(null);
+        setRelatedShoots([]);
+        setActiveShootIndex(0);
+      } catch (error) {
+        console.error('Error approving shoots:', error);
+        alert('Error approving shoots. Please try again.');
+      } finally {
+        setIsApproving(false);
       }
-      setShowDetailsModal(false);
-      setSelectedShoot(null);
-      setRelatedShoots([]);
-      setActiveShootIndex(0);
     }
   };
 
@@ -784,10 +803,18 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
             </button>
             <button
               onClick={handleApprove}
-                    className="px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm"
+              disabled={isApproving}
+              className="px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#27AE60' }}
             >
-                    Approve {isMultiShoot ? 'All' : 'Quote'}
+              {isApproving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Approving...
+                </span>
+              ) : (
+                `Approve ${isMultiShoot ? 'All' : 'Quote'}`
+              )}
             </button>
                 </div>
               </div>
