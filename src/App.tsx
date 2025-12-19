@@ -169,24 +169,28 @@ function AppContent() {
   };
 
   // Add activity to shoot
-  const addActivityToShoot = (shootId: string, action: string, description: string, emailTriggered: boolean = false) => {
-    setShoots(prev => prev.map(shoot => {
-      if (shoot.id === shootId) {
-        const newActivity: Activity = {
-          id: Date.now().toString(),
-          shootId,
-          action,
-          description,
-          timestamp: new Date(),
-          emailTriggered,
-        };
-        return {
-          ...shoot,
-          activities: [...(shoot.activities || []), newActivity],
-        };
-      }
-      return shoot;
-    }));
+  const addActivityToShoot = async (shootId: string, action: string, description: string, emailTriggered: boolean = false) => {
+    const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
+    
+    const newActivity: Activity = {
+      id: Date.now().toString(),
+      shootId,
+      action,
+      description,
+      timestamp: new Date(),
+      emailTriggered,
+    };
+    
+    const updatedShoot = {
+      ...shoot,
+      activities: [...(shoot.activities || []), newActivity],
+    };
+    
+    // Save to API
+    await saveShootToAPI(updatedShoot);
+    
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
   };
 
   // EmailJS Configuration
@@ -712,22 +716,13 @@ The invoice has been received and is being processed.
     saveToStorage(STORAGE_KEYS.CATALOG, catalogItems);
   }, [catalogItems]);
 
-  // Persist shoots to localStorage (and Supabase if configured)
+  // Persist shoots to localStorage only (API sync is done immediately on each action)
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
-    
-    // Also sync to API if configured (debounced to avoid too many requests)
-    if (API_URL && !isLoadingData && shoots.length > 0) {
-      const syncToSupabase = async () => {
-        for (const shoot of shoots) {
-          await saveShootToAPI(shoot);
-        }
-      };
-      // Use a small delay to batch updates
-      const timeoutId = setTimeout(syncToSupabase, 500);
-      return () => clearTimeout(timeoutId);
+    if (!API_URL) {
+      // Only use localStorage if API is not configured
+      saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
     }
-  }, [shoots, isLoadingData]);
+  }, [shoots]);
 
   // Persist notifications to localStorage
   useEffect(() => {
@@ -860,13 +855,16 @@ The invoice has been received and is being processed.
     return () => clearInterval(interval);
   }, [shoots]);
 
-  const handleSendToVendor = (shootId: string) => {
+  const handleSendToVendor = async (shootId: string) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (shoot) {
+      const updatedShoot = { ...shoot, status: 'with_vendor' as ShootStatus };
+      
+      // Save to API first
+      await saveShootToAPI(updatedShoot);
+      
       setShoots(prev => prev.map(s => 
-        s.id === shootId 
-          ? { ...s, status: 'with_vendor' as ShootStatus }
-          : s
+        s.id === shootId ? updatedShoot : s
       ));
       
       // Trigger email notification
@@ -881,29 +879,33 @@ The invoice has been received and is being processed.
     }
   };
 
-  const handleVendorSubmit = (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
+  const handleVendorSubmit = async (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
+    const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
+    
+    // Update equipment with vendor rates if provided
+    let updatedEquipment = shoot.equipment;
+    if (itemizedPrices && itemizedPrices.length > 0) {
+      updatedEquipment = shoot.equipment.map(eq => {
+        const priceInfo = itemizedPrices.find(p => p.id === eq.id);
+        return priceInfo ? { ...eq, vendorRate: priceInfo.vendorRate } : eq;
+      });
+    }
+    
+    console.log('Updating shoot:', shoot.name, 'with amount:', amount);
+    
+    const updatedShoot = { 
+      ...shoot, 
+      status: 'with_swati' as ShootStatus,
+      equipment: updatedEquipment,
+      vendorQuote: { amount, notes }
+    };
+    
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
+    
     // Use functional update to ensure all multi-shoot updates are processed correctly
-    setShoots(prev => prev.map(s => {
-      if (s.id !== shootId) return s;
-      
-      // Update equipment with vendor rates if provided
-      let updatedEquipment = s.equipment;
-      if (itemizedPrices && itemizedPrices.length > 0) {
-        updatedEquipment = s.equipment.map(eq => {
-          const priceInfo = itemizedPrices.find(p => p.id === eq.id);
-          return priceInfo ? { ...eq, vendorRate: priceInfo.vendorRate } : eq;
-        });
-      }
-      
-      console.log('Updating shoot:', s.name, 'with amount:', amount);
-      
-      return { 
-        ...s, 
-        status: 'with_swati' as ShootStatus,
-        equipment: updatedEquipment,
-        vendorQuote: { amount, notes }
-      };
-    }));
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     const shoot = shoots.find(s => s.id === shootId);
     
@@ -938,103 +940,103 @@ The invoice has been received and is being processed.
     setViewMode('dashboard');
   };
 
-  const handleApprove = (shootId: string) => {
+  const handleApprove = async (shootId: string) => {
     const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
+    
+    const updatedShoot = { 
+      ...shoot, 
+      status: 'ready_for_shoot' as ShootStatus,
+      approved: true,
+      approvedAmount: shoot.vendorQuote?.amount
+    };
+    
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
     
     // Use functional update for multi-shoot support
-    setShoots(prev => prev.map(s => 
-      s.id === shootId 
-        ? { 
-            ...s, 
-            status: 'ready_for_shoot' as ShootStatus,
-            approved: true,
-            approvedAmount: s.vendorQuote?.amount
-          }
-        : s
-    ));
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-    if (shoot) {
-      // Trigger email that quote has been approved
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'approved', 
-        shoot.requestor.email || 'anish@company.com',
-        {
-          dates: shoot.date,
-          location: shoot.location,
-          quoteAmount: shoot.vendorQuote?.amount,
-        }
-      );
-      
-      addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount.toLocaleString()}`);
-    }
+    // Trigger email that quote has been approved
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'approved', 
+      shoot.requestor.email || 'anish@company.com',
+      {
+        dates: shoot.date,
+        location: shoot.location,
+        quoteAmount: shoot.vendorQuote?.amount,
+      }
+    );
+    
+    addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount.toLocaleString()}`);
   };
 
-  const handleReject = (shootId: string, reason: string) => {
+  const handleReject = async (shootId: string, reason: string) => {
     const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
+    
+    const updatedShoot = { 
+      ...shoot, 
+      status: 'with_vendor' as ShootStatus,
+      rejectionReason: reason,
+      vendorQuote: undefined
+    };
+    
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
     
     // Use functional update for multi-shoot support
-    setShoots(prev => prev.map(s => 
-      s.id === shootId 
-        ? { 
-            ...s, 
-            status: 'with_vendor' as ShootStatus,
-            rejectionReason: reason,
-            vendorQuote: undefined
-          }
-        : s
-    ));
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-    if (shoot) {
-      addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
-    }
+    addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };
 
-  const handleUploadInvoice = (shootId: string, fileName: string) => {
+  const handleUploadInvoice = async (shootId: string, fileName: string) => {
     const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
     
-    setShoots(prev => prev.map(s => 
-      s.id === shootId 
-        ? { 
-            ...s,
-            invoiceFile: {
-              name: fileName,
-              url: '#'
-            }
-          }
-        : s
-    ));
+    const updatedShoot = { 
+      ...shoot,
+      invoiceFile: {
+        name: fileName,
+        url: '#'
+      }
+    };
     
-    if (shoot) {
-      // Trigger email that invoice has been uploaded
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'invoice_uploaded', 
-        'finance@company.com'
-      );
-      
-      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
-    }
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
+    
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    
+    // Trigger email that invoice has been uploaded
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'invoice_uploaded', 
+      'finance@company.com'
+    );
+    
+    addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
   };
 
-  const handleMarkPaid = (shootId: string) => {
+  const handleMarkPaid = async (shootId: string) => {
     const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
     
-    setShoots(prev => prev.map(s => 
-      s.id === shootId 
-        ? { 
-            ...s, 
-            status: 'completed' as ShootStatus,
-            paid: true
-          }
-        : s
-    ));
+    const updatedShoot = { 
+      ...shoot, 
+      status: 'completed' as ShootStatus,
+      paid: true
+    };
     
-    if (shoot) {
-      addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
-    }
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
+    
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    
+    addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
     
     setSelectedShootId(null);
   };
@@ -1156,10 +1158,11 @@ The invoice has been received and is being processed.
     const newShoot = createSingleShoot(requestData, baseTimestamp);
     console.log('Creating single shoot:', newShoot.name, 'with groupId:', newShoot.requestGroupId, 'id:', newShoot.id);
     
-    setShoots(prev => [...[newShoot], ...prev]);
+    // Save to API first (await to ensure it completes)
+    await saveShootToAPI(newShoot);
     
-    // Save to Supabase
-    saveShootToAPI(newShoot);
+    // Then update local state
+    setShoots(prev => [...[newShoot], ...prev]);
     
     // Change view first
     setViewMode('dashboard');
@@ -1330,20 +1333,24 @@ The invoice has been received and is being processed.
               : []
           }
           catalogItems={catalogItems}
-          onSave={(shootId, updatedEquipment, updatedVendorQuote) => {
-            setShoots(prev => prev.map(s => {
-              if (s.id !== shootId) return s;
-              
-              const updates: Partial<Shoot> = { equipment: updatedEquipment };
-              
-              // Update vendor quote if provided
-              if (updatedVendorQuote) {
-                updates.vendorQuote = updatedVendorQuote;
-                updates.approvedAmount = updatedVendorQuote.amount;
-              }
-              
-              return { ...s, ...updates };
-            }));
+          onSave={async (shootId, updatedEquipment, updatedVendorQuote) => {
+            const shoot = shoots.find(s => s.id === shootId);
+            if (!shoot) return;
+            
+            const updates: Partial<Shoot> = { equipment: updatedEquipment };
+            
+            // Update vendor quote if provided
+            if (updatedVendorQuote) {
+              updates.vendorQuote = updatedVendorQuote;
+              updates.approvedAmount = updatedVendorQuote.amount;
+            }
+            
+            const updatedShoot = { ...shoot, ...updates };
+            
+            // Save to API first
+            await saveShootToAPI(updatedShoot);
+            
+            setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
             
             // Add activity for the edit
             const priceNote = updatedVendorQuote 
