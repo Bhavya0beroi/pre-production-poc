@@ -170,9 +170,6 @@ function AppContent() {
 
   // Add activity to shoot
   const addActivityToShoot = async (shootId: string, action: string, description: string, emailTriggered: boolean = false) => {
-    const shoot = shoots.find(s => s.id === shootId);
-    if (!shoot) return;
-    
     const newActivity: Activity = {
       id: Date.now().toString(),
       shootId,
@@ -182,15 +179,21 @@ function AppContent() {
       emailTriggered,
     };
     
-    const updatedShoot = {
-      ...shoot,
-      activities: [...(shoot.activities || []), newActivity],
-    };
-    
-    // Save to API
-    await saveShootToAPI(updatedShoot);
-    
-    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    // Use functional update to get the CURRENT state, not stale closure
+    setShoots(prev => {
+      const shoot = prev.find(s => s.id === shootId);
+      if (!shoot) return prev;
+      
+      const updatedShoot = {
+        ...shoot,
+        activities: [...(shoot.activities || []), newActivity],
+      };
+      
+      // Save to API with current state
+      saveShootToAPI(updatedShoot);
+      
+      return prev.map(s => s.id === shootId ? updatedShoot : s);
+    });
   };
 
   // EmailJS Configuration
