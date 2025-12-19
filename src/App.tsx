@@ -643,52 +643,56 @@ The invoice has been received and is being processed.
       }
 
       try {
-        console.log('Loading data from API...');
+        console.log('Trying to load data from API...');
         
-        // Clear localStorage when using API to prevent conflicts
-        localStorage.removeItem(STORAGE_KEYS.SHOOTS);
-        localStorage.removeItem(STORAGE_KEYS.CATALOG);
+        // Try to load shoots from API
+        const shootsResponse = await fetch(`${API_URL}/api/shoots`, { 
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
         
-        // Load shoots from API
-        const shootsResponse = await fetch(`${API_URL}/api/shoots`);
         if (shootsResponse.ok) {
           const shootsData = await shootsResponse.json();
-          // Always use API data, even if empty
-          const formattedShoots: Shoot[] = (shootsData || []).map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            date: s.date,
-            duration: s.duration,
-            location: s.location,
-            equipment: s.equipment || [],
-            status: s.status,
-            requestor: s.requestor,
-            vendorQuote: s.vendor_quote,
-            approved: s.approved,
-            approvedAmount: s.approved_amount,
-            invoiceFile: s.invoice_file,
-            paid: s.paid,
-            rejectionReason: s.rejection_reason,
-            approvalEmail: s.approval_email,
-            cancellationReason: s.cancellation_reason,
-            activities: s.activities || [],
-            emailThreadId: s.email_thread_id,
-            createdAt: s.created_at ? new Date(s.created_at) : undefined,
-            shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
-            requestGroupId: s.request_group_id,
-            isMultiShoot: s.is_multi_shoot,
-            multiShootIndex: s.multi_shoot_index,
-            totalShootsInRequest: s.total_shoots_in_request,
-          }));
-          setShoots(formattedShoots);
-          console.log('Loaded', formattedShoots.length, 'shoots from API');
+          // Only use API data if we got a valid response
+          if (Array.isArray(shootsData)) {
+            const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              date: s.date,
+              duration: s.duration,
+              location: s.location,
+              equipment: s.equipment || [],
+              status: s.status,
+              requestor: s.requestor,
+              vendorQuote: s.vendor_quote,
+              approved: s.approved,
+              approvedAmount: s.approved_amount,
+              invoiceFile: s.invoice_file,
+              paid: s.paid,
+              rejectionReason: s.rejection_reason,
+              approvalEmail: s.approval_email,
+              cancellationReason: s.cancellation_reason,
+              activities: s.activities || [],
+              emailThreadId: s.email_thread_id,
+              createdAt: s.created_at ? new Date(s.created_at) : undefined,
+              shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
+              requestGroupId: s.request_group_id,
+              isMultiShoot: s.is_multi_shoot,
+              multiShootIndex: s.multi_shoot_index,
+              totalShootsInRequest: s.total_shoots_in_request,
+            }));
+            setShoots(formattedShoots);
+            console.log('Loaded', formattedShoots.length, 'shoots from API');
+          }
+        } else {
+          console.log('API returned error, keeping localStorage data');
         }
 
-        // Load catalog from API
-        const catalogResponse = await fetch(`${API_URL}/api/catalog`);
+        // Try to load catalog from API
+        const catalogResponse = await fetch(`${API_URL}/api/catalog`, {
+          signal: AbortSignal.timeout(5000)
+        });
         if (catalogResponse.ok) {
           const catalogData = await catalogResponse.json();
-          // If API has catalog data, use it; otherwise keep defaults
           if (catalogData && catalogData.length > 0) {
             const formattedCatalog: CatalogItem[] = catalogData.map((c: any) => ({
               id: c.id,
@@ -702,7 +706,7 @@ The invoice has been received and is being processed.
           }
         }
       } catch (error) {
-        console.error('Error loading data from API:', error);
+        console.log('API not available, using localStorage data');
       } finally {
         setIsLoadingData(false);
       }
@@ -716,12 +720,9 @@ The invoice has been received and is being processed.
     saveToStorage(STORAGE_KEYS.CATALOG, catalogItems);
   }, [catalogItems]);
 
-  // Persist shoots to localStorage only (API sync is done immediately on each action)
+  // Always persist shoots to localStorage as backup
   useEffect(() => {
-    if (!API_URL) {
-      // Only use localStorage if API is not configured
-      saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
-    }
+    saveToStorage(STORAGE_KEYS.SHOOTS, shoots);
   }, [shoots]);
 
   // Persist notifications to localStorage
@@ -765,9 +766,11 @@ The invoice has been received and is being processed.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dbShoot),
+        signal: AbortSignal.timeout(5000), // 5 second timeout
       });
     } catch (error) {
-      console.error('Error saving shoot to API:', error);
+      // API save failed, but localStorage backup is already saved
+      console.log('API save failed, data saved to localStorage');
     }
   };
 
