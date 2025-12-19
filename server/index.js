@@ -85,6 +85,7 @@ app.get('/api/shoots', async (req, res) => {
 app.post('/api/shoots', async (req, res) => {
   try {
     const shoot = req.body;
+    console.log('POST /api/shoots - Received:', shoot.id, 'status:', shoot.status);
     const result = await pool.query(`
       INSERT INTO shoots (
         id, name, date, duration, location, equipment, status, requestor,
@@ -144,10 +145,11 @@ app.post('/api/shoots', async (req, res) => {
       shoot.total_shoots_in_request
     ]);
     
+    console.log('POST /api/shoots - Saved:', result.rows[0].id, 'status:', result.rows[0].status);
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error saving shoot:', error);
-    res.status(500).json({ error: 'Failed to save shoot' });
+    res.status(500).json({ error: 'Failed to save shoot', details: error.message });
   }
 });
 
