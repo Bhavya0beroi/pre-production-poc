@@ -936,7 +936,11 @@ The invoice has been received and is being processed.
     
     addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
     
-    setViewMode('dashboard');
+    // Only redirect to dashboard if not in standalone vendor mode
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('vendor')) {
+      setViewMode('dashboard');
+    }
   };
 
   const handleApprove = async (shootId: string) => {
@@ -1231,25 +1235,41 @@ The invoice has been received and is being processed.
         />
       )}
       
-      {viewMode === 'vendor' && selectedShoot && (
-        <VendorQuoteForm 
-          shoot={selectedShoot}
-          relatedShoots={
-            selectedShoot.requestGroupId 
-              ? shoots.filter(s => 
-                  s.requestGroupId === selectedShoot.requestGroupId && 
-                  s.id !== selectedShoot.id
-                )
-              : []
-          }
-          onSubmit={handleVendorSubmit}
-          onBack={() => {
-            setViewMode('dashboard');
-            // Clear URL params when going back
-            window.history.replaceState({}, '', window.location.pathname);
-          }}
-          isStandalone={!!vendorShootId}
-        />
+      {viewMode === 'vendor' && (
+        isLoadingData ? (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading shoot data...</p>
+            </div>
+          </div>
+        ) : selectedShoot ? (
+          <VendorQuoteForm 
+            shoot={selectedShoot}
+            relatedShoots={
+              selectedShoot.requestGroupId 
+                ? shoots.filter(s => 
+                    s.requestGroupId === selectedShoot.requestGroupId && 
+                    s.id !== selectedShoot.id
+                  )
+                : []
+            }
+            onSubmit={handleVendorSubmit}
+            onBack={() => {
+              setViewMode('dashboard');
+              // Clear URL params when going back
+              window.history.replaceState({}, '', window.location.pathname);
+            }}
+            isStandalone={!!vendorShootId}
+          />
+        ) : (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <p className="text-gray-600 text-lg">Shoot not found</p>
+              <p className="text-gray-400 text-sm mt-2">This quote request may have expired or been removed.</p>
+            </div>
+          </div>
+        )
       )}
       
       {viewMode === 'approval' && (
