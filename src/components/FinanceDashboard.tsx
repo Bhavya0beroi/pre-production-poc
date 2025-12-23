@@ -43,6 +43,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [chartView, setChartView] = useState<ChartView>('monthly');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedStartDate, setSelectedStartDate] = useState<string>('');
+  const [selectedEndDate, setSelectedEndDate] = useState<string>('');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
   const openPdfViewer = (shoot: Shoot) => {
@@ -117,6 +122,37 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return groups;
   };
 
+  // Helper to get shoot date as Date object - aligned with getMonthYear
+  const getShootDateObj = (shoot: any): Date | null => {
+    const dateStr = shoot.date;
+    
+    // Try YYYY-MM-DD format first (this is how data is stored)
+    if (dateStr && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    
+    // Try shootDate field
+    if (shoot.shootDate) {
+      const d = new Date(shoot.shootDate);
+      if (!isNaN(d.getTime())) {
+        return d;
+      }
+    }
+    
+    // Try shootDates array
+    if (shoot.shootDates?.[0]) {
+      const d = new Date(shoot.shootDates[0]);
+      if (!isNaN(d.getTime())) {
+        return d;
+      }
+    }
+    
+    // Fallback: use getMonthYear to construct date
+    const { month, year, day } = getMonthYear(shoot);
+    return new Date(year, month, day);
+  };
+
   // Filter invoice data
   const getInvoiceData = () => {
     let filtered = shoots.filter(s => 
@@ -129,6 +165,18 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       filtered = filtered.filter(s => s.paid);
     } else if (filterTab === 'pending') {
       filtered = filtered.filter(s => !s.paid);
+    }
+
+    // Apply date range filter
+    if (filterStartDate && filterEndDate) {
+      const startDate = new Date(filterStartDate);
+      const endDate = new Date(filterEndDate);
+      endDate.setHours(23, 59, 59, 999); // Include full end date
+      
+      filtered = filtered.filter(s => {
+        const shootDate = getShootDateObj(s);
+        return shootDate && shootDate >= startDate && shootDate <= endDate;
+      });
     }
 
     return filtered.map(shoot => ({
@@ -204,39 +252,89 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         };
       });
     } else {
-      // Daily view for selected month
-      if (!selectedMonth || !groupedInvoices[selectedMonth]) return [];
+      // Daily/Weekly view with date range
+      if (!selectedStartDate || !selectedEndDate) return [];
       
-      const monthShoots = groupedInvoices[selectedMonth];
-      const dailyData: { [key: string]: { amount: number; shoots: number } } = {};
+      // Parse dates avoiding timezone issues (YYYY-MM-DD format from input)
+      const [startYear, startMonth, startDay] = selectedStartDate.split('-').map(Number);
+      const [endYear, endMonth, endDay] = selectedEndDate.split('-').map(Number);
+      const startDate = new Date(startYear, startMonth - 1, startDay);
+      const endDate = new Date(endYear, endMonth - 1, endDay);
       
-      monthShoots.forEach(shoot => {
-        const { day } = getMonthYear(shoot);
-        const dayKey = String(day).padStart(2, '0');
-        if (!dailyData[dayKey]) {
-          dailyData[dayKey] = { amount: 0, shoots: 0 };
-        }
-        dailyData[dayKey].amount = Number(dailyData[dayKey].amount) + parseAmount(shoot);
-        dailyData[dayKey].shoots += 1;
+      // Filter shoots within date range
+      const filteredShoots = invoiceData.filter(shoot => {
+        const shootDate = getShootDateObj(shoot);
+        if (!shootDate) return false;
+        
+        // Compare using date strings to avoid timezone issues
+        const shootDateOnly = new Date(shootDate.getFullYear(), shootDate.getMonth(), shootDate.getDate());
+        return shootDateOnly >= startDate && shootDateOnly <= endDate;
       });
       
-      return Object.keys(dailyData).sort().map(day => ({
-        name: `Day ${parseInt(day)}`,
-        fullName: `${formatMonthKey(selectedMonth)} - Day ${parseInt(day)}`,
-        amount: dailyData[day].amount,
-        shoots: dailyData[day].shoots,
-      }));
+      // Group by day using local date key
+      const dailyData: { [key: string]: { amount: number; shoots: number; date: Date; shootNames: string[] } } = {};
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      filteredShoots.forEach(shoot => {
+        const shootDate = getShootDateObj(shoot);
+        if (!shootDate) return;
+        
+        // Use local date for key
+        const dateKey = `${shootDate.getFullYear()}-${String(shootDate.getMonth() + 1).padStart(2, '0')}-${String(shootDate.getDate()).padStart(2, '0')}`;
+        if (!dailyData[dateKey]) {
+          dailyData[dateKey] = { amount: 0, shoots: 0, date: shootDate, shootNames: [] };
+        }
+        dailyData[dateKey].amount = Number(dailyData[dateKey].amount) + parseAmount(shoot);
+        dailyData[dateKey].shoots += 1;
+        dailyData[dateKey].shootNames.push(shoot.title || shoot.name || 'Unnamed Shoot');
+      });
+      
+      // Generate all days in range for continuous line
+      const allDays: { name: string; fullName: string; amount: number; shoots: number; shootNames: string[] }[] = [];
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+        const dayName = dayNames[current.getDay()];
+        const dayNum = current.getDate();
+        const monthName = shortMonthNames[current.getMonth() + 1];
+        
+        allDays.push({
+          name: `${dayName}`,
+          fullName: `${dayName}, ${monthName} ${dayNum}`,
+          amount: dailyData[dateKey]?.amount || 0,
+          shoots: dailyData[dateKey]?.shoots || 0,
+          shootNames: dailyData[dateKey]?.shootNames || [],
+        });
+        current.setDate(current.getDate() + 1);
+      }
+      
+      return allDays;
     }
-  }, [chartView, selectedMonth, groupedInvoices, monthOrder]);
+  }, [chartView, selectedStartDate, selectedEndDate, invoiceData, groupedInvoices, monthOrder]);
 
   // Custom tooltip for chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const shootNames = data.shootNames || [];
+      
       return (
-        <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-900 mb-2">{payload[0].payload.fullName}</p>
-          <p className="text-green-600 text-lg font-bold">₹{payload[0].value.toLocaleString()}</p>
-          <p className="text-gray-500 text-sm">{payload[0].payload.shoots} shoots</p>
+        <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 max-w-xs">
+          <p className="font-semibold text-gray-900 mb-2">{data.fullName}</p>
+          <p className="text-lg font-bold" style={{ color: '#FF6B6B' }}>₹{payload[0].value.toLocaleString()}</p>
+          {shootNames.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <p className="text-xs text-gray-400 mb-1">{shootNames.length} Shoot{shootNames.length > 1 ? 's' : ''}:</p>
+              <div className="space-y-1">
+                {shootNames.slice(0, 5).map((name: string, idx: number) => (
+                  <p key={idx} className="text-sm text-gray-700 truncate">• {name}</p>
+                ))}
+                {shootNames.length > 5 && (
+                  <p className="text-xs text-gray-400">+{shootNames.length - 5} more</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -380,10 +478,74 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <div className="text-xs text-gray-400">Pending</div>
                 <div className="text-lg font-bold text-gray-900">₹{totalPending.toLocaleString()}</div>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
-                <List className="w-4 h-4" />
-                Filter
-            </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition-all ${
+                    filterStartDate && filterEndDate 
+                      ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" />
+                  {filterStartDate && filterEndDate 
+                    ? `${new Date(filterStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${new Date(filterEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                    : 'Filter by Date'}
+                </button>
+                
+                {showFilterDropdown && (
+                  <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-xl p-4 z-50 min-w-[320px]">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-semibold text-gray-900">Filter by Date</h4>
+                      <button 
+                        onClick={() => setShowFilterDropdown(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm text-gray-500 mb-1">From</label>
+                        <input
+                          type="date"
+                          value={filterStartDate}
+                          onChange={(e) => setFilterStartDate(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-500 mb-1">To</label>
+                        <input
+                          type="date"
+                          value={filterEndDate}
+                          onChange={(e) => setFilterEndDate(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => {
+                          setFilterStartDate('');
+                          setFilterEndDate('');
+                        }}
+                        className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        onClick={() => setShowFilterDropdown(false)}
+                        className="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -394,7 +556,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             /* Chart View */
             <div className="space-y-6">
               {/* Time Period Selector */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-gray-500">View:</span>
                 <button
                   onClick={() => setChartView('monthly')}
@@ -407,8 +569,13 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <button
                   onClick={() => {
                     setChartView('daily');
-                    if (!selectedMonth && monthOrder.length > 0) {
-                      setSelectedMonth(monthOrder[monthOrder.length - 1]);
+                    // Set default date range to last 7 days if not set
+                    if (!selectedStartDate || !selectedEndDate) {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(start.getDate() - 7);
+                      setSelectedStartDate(start.toISOString().split('T')[0]);
+                      setSelectedEndDate(end.toISOString().split('T')[0]);
                     }
                   }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -418,15 +585,26 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   Weekly
                 </button>
                 {chartView === 'daily' && (
-                  <select
-                    value={selectedMonth || ''}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="ml-2 px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white"
-                  >
-                    {monthOrder.map(m => (
-                      <option key={m} value={m}>{formatMonthKey(m)}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2 ml-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-500">From:</label>
+                      <input
+                        type="date"
+                        value={selectedStartDate}
+                        onChange={(e) => setSelectedStartDate(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-500">To:</label>
+                      <input
+                        type="date"
+                        value={selectedEndDate}
+                        onChange={(e) => setSelectedEndDate(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -435,10 +613,14 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">
-                      {chartView === 'monthly' ? 'Monthly Spending' : `Daily Spending - ${selectedMonth ? formatMonthKey(selectedMonth) : ''}`}
+                      {chartView === 'monthly' ? 'Monthly Spending' : 'Weekly Spending'}
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      {chartView === 'monthly' ? 'Track your spending month over month' : 'Daily breakdown for selected month'}
+                      {chartView === 'monthly' 
+                        ? 'Track your spending month over month' 
+                        : selectedStartDate && selectedEndDate 
+                          ? `${new Date(selectedStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${new Date(selectedEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                          : 'Select a date range'}
                     </p>
                   </div>
                   <div className="text-right">
@@ -449,43 +631,49 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   </div>
                 </div>
                 
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis 
-                        dataKey="name" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#6B7280', fontSize: 12 }}
-                      />
-                      <YAxis 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#6B7280', fontSize: 12 }}
-                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                      />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'white', 
-                          border: '1px solid #E5E7EB', 
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }}
-                        formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Amount']}
-                        labelFormatter={(label) => chartData.find(d => d.name === label)?.fullName || label}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="amount" 
-                        stroke="#FF6B6B" 
-                        strokeWidth={3}
-                        dot={{ r: 6, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
-                        activeDot={{ r: 8, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {chartData.length > 0 ? (
+                  <div style={{ width: '100%', height: 320 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <XAxis 
+                          dataKey="name" 
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#6B7280', fontSize: 12 }}
+                        />
+                        <YAxis 
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#6B7280', fontSize: 12 }}
+                          tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'white', 
+                            border: '1px solid #E5E7EB', 
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}
+                          formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Amount']}
+                          labelFormatter={(label) => chartData.find(d => d.name === label)?.fullName || label}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="amount" 
+                          stroke="#FF6B6B" 
+                          strokeWidth={3}
+                          dot={{ r: 6, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
+                          activeDot={{ r: 8, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-80 flex items-center justify-center text-gray-400">
+                    No data available for chart
+                  </div>
+                )}
               </div>
 
               {/* Monthly Summary Cards */}
