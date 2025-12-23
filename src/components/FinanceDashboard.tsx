@@ -292,9 +292,32 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       <div className="flex-1 overflow-auto">
         {/* Top Header */}
         <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
-            <p className="text-gray-400 text-sm">Track payments and spending trends</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
+              <p className="text-gray-400 text-sm">Track payments and spending trends</p>
+            </div>
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('chart')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'chart' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Chart
+              </button>
+            </div>
           </div>
         </div>
 
@@ -305,34 +328,43 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setFilterTab('all')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'all' 
-                    ? 'text-white' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                style={filterTab === 'all' ? { backgroundColor: '#2D60FF' } : {}}
+                className="rounded-full font-medium transition-all whitespace-nowrap"
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  backgroundColor: filterTab === 'all' ? '#2563EB' : '#F3F4F6',
+                  color: filterTab === 'all' ? '#FFFFFF' : '#4B5563',
+                  boxShadow: filterTab === 'all' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                }}
               >
                 All ({invoiceData.length})
               </button>
               <button
                 onClick={() => setFilterTab('paid')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'paid' 
-                    ? 'text-white' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                style={filterTab === 'paid' ? { backgroundColor: '#2D60FF' } : {}}
+                className="rounded-full font-medium transition-all whitespace-nowrap"
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  backgroundColor: filterTab === 'paid' ? '#2563EB' : '#F3F4F6',
+                  color: filterTab === 'paid' ? '#FFFFFF' : '#4B5563',
+                  boxShadow: filterTab === 'paid' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                }}
               >
                 Paid ({shoots.filter(s => s.paid).length})
               </button>
               <button
                 onClick={() => setFilterTab('pending')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'pending' 
-                    ? 'text-white' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                style={filterTab === 'pending' ? { backgroundColor: '#2D60FF' } : {}}
+                className="rounded-full font-medium transition-all whitespace-nowrap"
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  backgroundColor: filterTab === 'pending' ? '#2563EB' : '#F3F4F6',
+                  color: filterTab === 'pending' ? '#FFFFFF' : '#4B5563',
+                  boxShadow: filterTab === 'pending' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                }}
               >
                 Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
               </button>
@@ -340,31 +372,145 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
             {/* Right: Stats + Filter */}
             <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-400">Total Paid</div>
-                  <div className="text-lg font-bold text-gray-900">₹{totalPaid.toLocaleString()}</div>
-                </div>
+              <div>
+                <div className="text-xs text-gray-400">Total Paid</div>
+                <div className="text-lg font-bold text-gray-900">₹{totalPaid.toLocaleString()}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-gray-400" />
-                <div>
-                  <div className="text-xs text-gray-400">Pending</div>
-                  <div className="text-lg font-bold text-gray-900">₹{totalPending.toLocaleString()}</div>
-                </div>
+              <div>
+                <div className="text-xs text-gray-400">Pending</div>
+                <div className="text-lg font-bold text-gray-900">₹{totalPending.toLocaleString()}</div>
               </div>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
                 <List className="w-4 h-4" />
                 Filter
-              </button>
+            </button>
             </div>
           </div>
         </div>
 
         {/* Content Area */}
         <div className="px-6 py-4">
-          {/* List View */}
+          {viewMode === 'chart' ? (
+            /* Chart View */
+            <div className="space-y-6">
+              {/* Time Period Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">View:</span>
+                <button
+                  onClick={() => setChartView('monthly')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    chartView === 'monthly' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => {
+                    setChartView('daily');
+                    if (!selectedMonth && monthOrder.length > 0) {
+                      setSelectedMonth(monthOrder[monthOrder.length - 1]);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    chartView === 'daily' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Weekly
+                </button>
+                {chartView === 'daily' && (
+                  <select
+                    value={selectedMonth || ''}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="ml-2 px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white"
+                  >
+                    {monthOrder.map(m => (
+                      <option key={m} value={m}>{formatMonthKey(m)}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Main Chart */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {chartView === 'monthly' ? 'Monthly Spending' : `Daily Spending - ${selectedMonth ? formatMonthKey(selectedMonth) : ''}`}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {chartView === 'monthly' ? 'Track your spending month over month' : 'Daily breakdown for selected month'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-400">Total</div>
+                    <div className="text-2xl font-bold" style={{ color: '#FF6B6B' }}>
+                      ₹{chartData.reduce((sum, d) => Number(sum) + Number(d.amount), 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                      />
+                      <YAxis 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #E5E7EB', 
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                        }}
+                        formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Amount']}
+                        labelFormatter={(label) => chartData.find(d => d.name === label)?.fullName || label}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="amount" 
+                        stroke="#FF6B6B" 
+                        strokeWidth={3}
+                        dot={{ r: 6, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
+                        activeDot={{ r: 8, fill: '#FF6B6B', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Monthly Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                {monthOrder.slice(-6).map(monthKey => {
+                  const monthShoots = groupedInvoices[monthKey] || [];
+                  const total = getMonthTotal(monthShoots);
+                  
+                  return (
+                    <div
+                      key={monthKey}
+                      className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => { setChartView('daily'); setSelectedMonth(monthKey); }}
+                      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                    >
+                      <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: '#27AE60' }}>₹{total.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400 mt-1">{monthShoots.length} shoots</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* List View */
             <div className="space-y-4">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
@@ -394,7 +540,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                         <div className="divide-y divide-gray-100">
                           {monthInvoices.map((invoice) => {
                             const isInvoiceExpanded = expandedInvoices.has(invoice.id);
-                            const hasEquipment = invoice.equipment && invoice.equipment.length > 0;
+                            // Only show equipment if it has actual rate/price data
+                            const hasEquipment = invoice.equipment && invoice.equipment.length > 0 && 
+                              invoice.equipment.some((e: any) => (e.rate || e.price || e.dailyRate || e.vendorRate || e.rentalCost || e.cost) > 0);
                             
                             return (
                               <div key={invoice.id}>
@@ -420,14 +568,14 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                       <div className="font-semibold text-sm" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</div>
                                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                         {invoice.paid ? 'Paid' : 'Pending'}
-                                      </span>
+                                  </span>
                                     </div>
                                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                       {invoice.invoiceFile && (
                                         <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
-                                          <FileText className="w-4 h-4" />
-                                        </button>
-                                      )}
+                                    <FileText className="w-4 h-4" />
+                                  </button>
+                                )}
                                       <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
                                         <Upload className="w-4 h-4" />
                                       </button>
@@ -437,30 +585,38 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                 
                                 {/* Equipment Details */}
                                 {isInvoiceExpanded && hasEquipment && (
-                                  <div className="bg-gray-50 px-5 py-3 ml-11 mr-5 mb-3 rounded-lg">
-                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Equipment Details</div>
+                                  <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Equipment Details</div>
                                     <table className="w-full text-sm">
                                       <thead>
-                                        <tr className="text-left text-gray-500 text-xs">
-                                          <th className="pb-2 font-medium">Item</th>
-                                          <th className="pb-2 font-medium text-center">Qty</th>
-                                          <th className="pb-2 font-medium text-right">Rate</th>
-                                          <th className="pb-2 font-medium text-right">Total</th>
+                                        <tr className="text-left text-gray-500 text-xs border-b border-gray-200">
+                                          <th className="pb-2 font-medium" style={{ width: '40%' }}>Item</th>
+                                          <th className="pb-2 font-medium text-center" style={{ width: '10%' }}>Qty</th>
+                                          <th className="pb-2 font-medium text-right" style={{ width: '15%' }}>Rate</th>
+                                          <th className="pb-2 font-medium text-center" style={{ width: '15%' }}>Days</th>
+                                          <th className="pb-2 font-medium text-right" style={{ width: '20%' }}>Total</th>
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {invoice.equipment.map((item: any, idx: number) => (
-                                          <tr key={idx} className="border-t border-gray-200">
-                                            <td className="py-2 text-gray-900">{item.name}</td>
-                                            <td className="py-2 text-center text-gray-600">{item.quantity || 1}</td>
-                                            <td className="py-2 text-right text-gray-600">₹{(item.rate || item.price || 0).toLocaleString()}</td>
-                                            <td className="py-2 text-right font-medium text-gray-900">₹{((item.quantity || 1) * (item.rate || item.price || 0)).toLocaleString()}</td>
-                                          </tr>
-                                        ))}
+                                        {invoice.equipment.map((item: any, idx: number) => {
+                                          const qty = item.quantity || item.qty || 1;
+                                          const rate = item.dailyRate || item.vendorRate || item.rate || item.price || item.rentalCost || item.cost || 0;
+                                          const days = item.days || item.rentalDays || 1;
+                                          const total = item.total || item.totalCost || (qty * rate * days);
+                                          return (
+                                            <tr key={idx} className="border-b border-gray-100">
+                                              <td className="py-2 text-gray-900">{item.name || item.itemName || '-'}</td>
+                                              <td className="py-2 text-center text-gray-600">{qty}</td>
+                                              <td className="py-2 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
+                                              <td className="py-2 text-center text-gray-600">{days}</td>
+                                              <td className="py-2 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
+                                            </tr>
+                                          );
+                                        })}
                                       </tbody>
                                       <tfoot>
                                         <tr className="border-t-2 border-gray-300">
-                                          <td colSpan={3} className="py-2 font-semibold text-gray-900">Total</td>
+                                          <td colSpan={4} className="py-2 font-semibold text-gray-900">Total</td>
                                           <td className="py-2 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
                                         </tr>
                                       </tfoot>
@@ -483,7 +639,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <p className="text-gray-500">No invoices found for the selected filter.</p>
               </div>
             )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
