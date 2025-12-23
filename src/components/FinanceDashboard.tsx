@@ -326,10 +326,10 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
           <div className="flex items-center justify-between">
             {/* Left: Tabs */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setFilterTab('all')}
+            <button
+              onClick={() => setFilterTab('all')}
                 className="rounded-full font-medium transition-all whitespace-nowrap"
-                style={{
+              style={{
                   padding: '10px 20px',
                   fontSize: '14px',
                   lineHeight: '1',
@@ -339,11 +339,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 }}
               >
                 All ({invoiceData.length})
-              </button>
-              <button
-                onClick={() => setFilterTab('paid')}
+            </button>
+            <button
+              onClick={() => setFilterTab('paid')}
                 className="rounded-full font-medium transition-all whitespace-nowrap"
-                style={{
+              style={{
                   padding: '10px 20px',
                   fontSize: '14px',
                   lineHeight: '1',
@@ -353,11 +353,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 }}
               >
                 Paid ({shoots.filter(s => s.paid).length})
-              </button>
-              <button
-                onClick={() => setFilterTab('pending')}
+            </button>
+            <button
+              onClick={() => setFilterTab('pending')}
                 className="rounded-full font-medium transition-all whitespace-nowrap"
-                style={{
+              style={{
                   padding: '10px 20px',
                   fontSize: '14px',
                   lineHeight: '1',
@@ -585,43 +585,45 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                 
                                 {/* Equipment Details */}
                                 {isInvoiceExpanded && hasEquipment && (
-                                  <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg">
+                                  <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg overflow-hidden">
                                     <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Equipment Details</div>
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className="text-left text-gray-500 text-xs border-b border-gray-200">
-                                          <th className="pb-2 font-medium" style={{ width: '40%' }}>Item</th>
-                                          <th className="pb-2 font-medium text-center" style={{ width: '10%' }}>Qty</th>
-                                          <th className="pb-2 font-medium text-right" style={{ width: '15%' }}>Rate</th>
-                                          <th className="pb-2 font-medium text-center" style={{ width: '15%' }}>Days</th>
-                                          <th className="pb-2 font-medium text-right" style={{ width: '20%' }}>Total</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {invoice.equipment.map((item: any, idx: number) => {
-                                          const qty = item.quantity || item.qty || 1;
-                                          const rate = item.dailyRate || item.vendorRate || item.rate || item.price || item.rentalCost || item.cost || 0;
-                                          const days = item.days || item.rentalDays || 1;
-                                          const total = item.total || item.totalCost || (qty * rate * days);
-                                          return (
-                                            <tr key={idx} className="border-b border-gray-100">
-                                              <td className="py-2 text-gray-900">{item.name || item.itemName || '-'}</td>
-                                              <td className="py-2 text-center text-gray-600">{qty}</td>
-                                              <td className="py-2 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
-                                              <td className="py-2 text-center text-gray-600">{days}</td>
-                                              <td className="py-2 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
-                                            </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                      <tfoot>
-                                        <tr className="border-t-2 border-gray-300">
-                                          <td colSpan={4} className="py-2 font-semibold text-gray-900">Total</td>
-                                          <td className="py-2 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
-                                        </tr>
-                                      </tfoot>
-                                    </table>
-                                  </div>
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm table-fixed border-collapse">
+                                        <thead>
+                                          <tr className="text-left text-gray-500 text-xs">
+                                            <th className="pb-2 pr-2 font-medium border-b border-gray-200" style={{ width: '40%' }}>Item</th>
+                                            <th className="pb-2 px-2 font-medium text-center border-b border-gray-200" style={{ width: '12%' }}>Qty</th>
+                                            <th className="pb-2 px-2 font-medium text-right border-b border-gray-200" style={{ width: '18%' }}>Rate</th>
+                                            <th className="pb-2 px-2 font-medium text-center border-b border-gray-200" style={{ width: '12%' }}>Days</th>
+                                            <th className="pb-2 pl-2 font-medium text-right border-b border-gray-200" style={{ width: '18%' }}>Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {invoice.equipment.map((item: any, idx: number) => {
+                                            const qty = item.quantity || item.qty || 1;
+                                            const rate = item.dailyRate || item.vendorRate || item.rate || item.price || item.rentalCost || item.cost || 0;
+                                            const days = item.days || item.rentalDays || 1;
+                                            const total = item.total || item.totalCost || (qty * rate * days);
+                                            return (
+                                              <tr key={idx} className="border-b border-gray-200">
+                                                <td className="py-2 pr-2 text-gray-900 truncate">{item.name || item.itemName || '-'}</td>
+                                                <td className="py-2 px-2 text-center text-gray-600">{qty}</td>
+                                                <td className="py-2 px-2 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
+                                                <td className="py-2 px-2 text-center text-gray-600">{days}</td>
+                                                <td className="py-2 pl-2 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
+                            </tr>
+                                            );
+                                          })}
+                        </tbody>
+                                        <tfoot>
+                                          <tr className="border-t-2 border-gray-400 bg-gray-100">
+                                            <td colSpan={4} className="py-2 pr-2 font-semibold text-gray-900">Total</td>
+                                            <td className="py-2 pl-2 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
+                                          </tr>
+                                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
                                 )}
                               </div>
                             );
@@ -639,7 +641,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <p className="text-gray-500">No invoices found for the selected filter.</p>
               </div>
             )}
-            </div>
+          </div>
           )}
         </div>
       </div>
