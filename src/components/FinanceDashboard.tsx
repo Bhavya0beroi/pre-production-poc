@@ -556,17 +556,44 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-100">
-              <button
-                onClick={() => {
-                  setShowPdfModal(false);
-                  setSelectedInvoice(null);
-                }}
-                className="w-full py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
-                style={{ backgroundColor: '#2D60FF' }}
-              >
-                <Download className="w-4 h-4" />
-                Download Invoice
-              </button>
+              <div className="flex gap-3">
+                {selectedInvoice.invoiceFile?.data ? (
+                  <button
+                    onClick={() => {
+                      // Download actual PDF
+                      const link = document.createElement('a');
+                      link.href = selectedInvoice.invoiceFile!.data!;
+                      link.download = selectedInvoice.invoiceFile!.name || 'invoice.pdf';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex-1 py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
+                    style={{ backgroundColor: '#27AE60' }}
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PDF
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onUploadInvoice(selectedInvoice.id)}
+                    className="flex-1 py-3 rounded-lg border-2 transition-colors font-medium flex items-center justify-center gap-2 hover:bg-orange-50"
+                    style={{ borderColor: '#F2994A', color: '#F2994A' }}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload PDF to Enable Download
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    setSelectedInvoice(null);
+                  }}
+                  className="px-6 py-3 rounded-lg border border-gray-300 text-gray-600 transition-colors font-medium hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

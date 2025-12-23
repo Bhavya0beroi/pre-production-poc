@@ -58,6 +58,7 @@ export interface Shoot {
   invoiceFile?: {
     name: string;
     url: string;
+    data?: string; // Base64 encoded PDF data
   };
   paid?: boolean;
   rejectionReason?: string;
@@ -170,14 +171,14 @@ function AppContent() {
 
   // Add activity to shoot
   const addActivityToShoot = async (shootId: string, action: string, description: string, emailTriggered: boolean = false) => {
-    const newActivity: Activity = {
-      id: Date.now().toString(),
-      shootId,
-      action,
-      description,
-      timestamp: new Date(),
-      emailTriggered,
-    };
+        const newActivity: Activity = {
+          id: Date.now().toString(),
+          shootId,
+          action,
+          description,
+          timestamp: new Date(),
+          emailTriggered,
+        };
     
     // Use functional update to get the CURRENT state, not stale closure
     setShoots(prev => {
@@ -185,9 +186,9 @@ function AppContent() {
       if (!shoot) return prev;
       
       const updatedShoot = {
-        ...shoot,
-        activities: [...(shoot.activities || []), newActivity],
-      };
+          ...shoot,
+          activities: [...(shoot.activities || []), newActivity],
+        };
       
       // Save to API with current state
       saveShootToAPI(updatedShoot);
@@ -902,22 +903,22 @@ The invoice has been received and is being processed.
       console.error('Shoot not found:', shootId);
       throw new Error('Shoot not found');
     }
-    
-    // Update equipment with vendor rates if provided
+      
+      // Update equipment with vendor rates if provided
     let updatedEquipment = shoot.equipment;
-    if (itemizedPrices && itemizedPrices.length > 0) {
+      if (itemizedPrices && itemizedPrices.length > 0) {
       updatedEquipment = shoot.equipment.map(eq => {
-        const priceInfo = itemizedPrices.find(p => p.id === eq.id);
-        return priceInfo ? { ...eq, vendorRate: priceInfo.vendorRate } : eq;
-      });
-    }
-    
+          const priceInfo = itemizedPrices.find(p => p.id === eq.id);
+          return priceInfo ? { ...eq, vendorRate: priceInfo.vendorRate } : eq;
+        });
+      }
+      
     const updatedShoot = { 
       ...shoot, 
-      status: 'with_swati' as ShootStatus,
-      equipment: updatedEquipment,
-      vendorQuote: { amount, notes }
-    };
+        status: 'with_swati' as ShootStatus,
+        equipment: updatedEquipment,
+        vendorQuote: { amount, notes }
+      };
     
     // Update local state first for immediate UI feedback
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
@@ -929,36 +930,36 @@ The invoice has been received and is being processed.
       console.error('API save failed, data saved locally:', error);
     }
     
-    // Trigger simulated email notification
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'quote_submitted', 
-      shoot.requestor.email || 'anish@company.com',
-      {
-        quoteAmount: amount,
-      }
-    );
-    
-    // Send REAL email for quote submission (in same thread)
-    const recipientEmail = shoot.approvalEmail || shoot.requestor.email || 'anish@company.com';
-    const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
-    sendQuoteSubmittedEmail(
-      recipientEmail,
-      recipientName,
-      shoot.name,
-      shoot.date,
-      amount,
-      shootId,
-      shoot.equipment || []
-    );
-    
-    addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
+      // Trigger simulated email notification
+      triggerEmail(
+        shootId, 
+        shoot.name, 
+        'quote_submitted', 
+        shoot.requestor.email || 'anish@company.com',
+        {
+          quoteAmount: amount,
+        }
+      );
+      
+      // Send REAL email for quote submission (in same thread)
+      const recipientEmail = shoot.approvalEmail || shoot.requestor.email || 'anish@company.com';
+      const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
+      sendQuoteSubmittedEmail(
+        recipientEmail,
+        recipientName,
+        shoot.name,
+        shoot.date,
+        amount,
+        shootId,
+        shoot.equipment || []
+      );
+      
+      addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
     
     // Only redirect to dashboard if not in standalone vendor mode
     const urlParams = new URLSearchParams(window.location.search);
     if (!urlParams.get('vendor')) {
-      setViewMode('dashboard');
+    setViewMode('dashboard');
     }
   };
 
@@ -971,8 +972,8 @@ The invoice has been received and is being processed.
     
     const updatedShoot = { 
       ...shoot, 
-      status: 'ready_for_shoot' as ShootStatus,
-      approved: true,
+            status: 'ready_for_shoot' as ShootStatus,
+            approved: true,
       approvedAmount: shoot.vendorQuote?.amount
     };
     
@@ -986,20 +987,20 @@ The invoice has been received and is being processed.
       console.error('API save failed:', error);
     }
     
-    // Trigger email that quote has been approved
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'approved', 
-      shoot.requestor.email || 'anish@company.com',
-      {
-        dates: shoot.date,
-        location: shoot.location,
-        quoteAmount: shoot.vendorQuote?.amount,
-      }
-    );
-    
-    addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount.toLocaleString()}`);
+      // Trigger email that quote has been approved
+      triggerEmail(
+        shootId, 
+        shoot.name, 
+        'approved', 
+        shoot.requestor.email || 'anish@company.com',
+        {
+          dates: shoot.date,
+          location: shoot.location,
+          quoteAmount: shoot.vendorQuote?.amount,
+        }
+      );
+      
+      addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount.toLocaleString()}`);
   };
 
   const handleReject = async (shootId: string, reason: string) => {
@@ -1011,9 +1012,9 @@ The invoice has been received and is being processed.
     
     const updatedShoot = { 
       ...shoot, 
-      status: 'with_vendor' as ShootStatus,
-      rejectionReason: reason,
-      vendorQuote: undefined
+            status: 'with_vendor' as ShootStatus,
+            rejectionReason: reason,
+            vendorQuote: undefined
     };
     
     // Update local state first for immediate UI feedback
@@ -1026,18 +1027,19 @@ The invoice has been received and is being processed.
       console.error('API save failed:', error);
     }
     
-    addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
+      addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };
 
-  const handleUploadInvoice = async (shootId: string, fileName: string) => {
+  const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) return;
     
     const updatedShoot = { 
       ...shoot,
-      invoiceFile: {
-        name: fileName,
-        url: '#'
+            invoiceFile: {
+              name: fileName,
+        url: '#',
+        data: fileData // Store base64 PDF data
       }
     };
     
@@ -1046,15 +1048,15 @@ The invoice has been received and is being processed.
     
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-    // Trigger email that invoice has been uploaded
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'invoice_uploaded', 
-      'finance@company.com'
-    );
-    
-    addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
+      // Trigger email that invoice has been uploaded
+      triggerEmail(
+        shootId, 
+        shoot.name, 
+        'invoice_uploaded', 
+        'finance@company.com'
+      );
+      
+      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
   };
 
   const handleMarkPaid = async (shootId: string) => {
@@ -1063,8 +1065,8 @@ The invoice has been received and is being processed.
     
     const updatedShoot = { 
       ...shoot, 
-      status: 'completed' as ShootStatus,
-      paid: true
+            status: 'completed' as ShootStatus,
+            paid: true
     };
     
     // Save to API first
@@ -1072,7 +1074,7 @@ The invoice has been received and is being processed.
     
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-    addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
+      addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
     
     setSelectedShootId(null);
   };
@@ -1277,24 +1279,24 @@ The invoice has been received and is being processed.
             </div>
           </div>
         ) : selectedShoot ? (
-          <VendorQuoteForm 
-            shoot={selectedShoot}
-            relatedShoots={
-              selectedShoot.requestGroupId 
-                ? shoots.filter(s => 
-                    s.requestGroupId === selectedShoot.requestGroupId && 
-                    s.id !== selectedShoot.id
-                  )
-                : []
-            }
-            onSubmit={handleVendorSubmit}
-            onBack={() => {
-              setViewMode('dashboard');
-              // Clear URL params when going back
-              window.history.replaceState({}, '', window.location.pathname);
-            }}
-            isStandalone={!!vendorShootId}
-          />
+        <VendorQuoteForm 
+          shoot={selectedShoot}
+          relatedShoots={
+            selectedShoot.requestGroupId 
+              ? shoots.filter(s => 
+                  s.requestGroupId === selectedShoot.requestGroupId && 
+                  s.id !== selectedShoot.id
+                )
+              : []
+          }
+          onSubmit={handleVendorSubmit}
+          onBack={() => {
+            setViewMode('dashboard');
+            // Clear URL params when going back
+            window.history.replaceState({}, '', window.location.pathname);
+          }}
+          isStandalone={!!vendorShootId}
+        />
         ) : (
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="text-center">
@@ -1388,15 +1390,15 @@ The invoice has been received and is being processed.
           onSave={async (shootId, updatedEquipment, updatedVendorQuote) => {
             const shoot = shoots.find(s => s.id === shootId);
             if (!shoot) return;
-            
-            const updates: Partial<Shoot> = { equipment: updatedEquipment };
-            
-            // Update vendor quote if provided
-            if (updatedVendorQuote) {
-              updates.vendorQuote = updatedVendorQuote;
-              updates.approvedAmount = updatedVendorQuote.amount;
-            }
-            
+              
+              const updates: Partial<Shoot> = { equipment: updatedEquipment };
+              
+              // Update vendor quote if provided
+              if (updatedVendorQuote) {
+                updates.vendorQuote = updatedVendorQuote;
+                updates.approvedAmount = updatedVendorQuote.amount;
+              }
+              
             const updatedShoot = { ...shoot, ...updates };
             
             // Save to API first
