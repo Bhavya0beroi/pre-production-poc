@@ -39,6 +39,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [chartView, setChartView] = useState<ChartView>('monthly');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -158,6 +159,16 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       newExpanded.add(monthKey);
     }
     setExpandedMonths(newExpanded);
+  };
+
+  const toggleInvoice = (invoiceId: string) => {
+    const newExpanded = new Set(expandedInvoices);
+    if (newExpanded.has(invoiceId)) {
+      newExpanded.delete(invoiceId);
+    } else {
+      newExpanded.add(invoiceId);
+    }
+    setExpandedInvoices(newExpanded);
   };
 
   const formatMonthKey = (key: string) => {
@@ -566,37 +577,84 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                     {isExpanded && (
                       <div className="border-t border-gray-100">
                         <div className="divide-y divide-gray-100">
-                          {monthInvoices.map((invoice) => (
-                            <div key={invoice.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.paid ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                                  <FileText className="w-4 h-4" />
+                          {monthInvoices.map((invoice) => {
+                            const isInvoiceExpanded = expandedInvoices.has(invoice.id);
+                            const hasEquipment = invoice.equipment && invoice.equipment.length > 0;
+                            
+                            return (
+                              <div key={invoice.id}>
+                                <div 
+                                  className={`px-5 py-3 flex items-center justify-between transition-colors ${hasEquipment ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                                  onClick={() => hasEquipment && toggleInvoice(invoice.id)}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.paid ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                                      {hasEquipment ? (
+                                        isInvoiceExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+                                      ) : (
+                                        <FileText className="w-4 h-4" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <div className="font-medium text-gray-900 text-sm">{invoice.name}</div>
+                                      <div className="text-xs text-gray-500">{invoice.date}</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <div className="text-right">
+                                      <div className="font-semibold text-sm" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</div>
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                        {invoice.paid ? 'Paid' : 'Pending'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                      {invoice.invoiceFile && (
+                                        <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
+                                          <FileText className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
+                                        <Upload className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <div className="font-medium text-gray-900 text-sm">{invoice.name}</div>
-                                  <div className="text-xs text-gray-500">{invoice.date}</div>
-                                </div>
+                                
+                                {/* Equipment Details */}
+                                {isInvoiceExpanded && hasEquipment && (
+                                  <div className="bg-gray-50 px-5 py-3 ml-11 mr-5 mb-3 rounded-lg">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Equipment Details</div>
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="text-left text-gray-500 text-xs">
+                                          <th className="pb-2 font-medium">Item</th>
+                                          <th className="pb-2 font-medium text-center">Qty</th>
+                                          <th className="pb-2 font-medium text-right">Rate</th>
+                                          <th className="pb-2 font-medium text-right">Total</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {invoice.equipment.map((item: any, idx: number) => (
+                                          <tr key={idx} className="border-t border-gray-200">
+                                            <td className="py-2 text-gray-900">{item.name}</td>
+                                            <td className="py-2 text-center text-gray-600">{item.quantity || 1}</td>
+                                            <td className="py-2 text-right text-gray-600">₹{(item.rate || item.price || 0).toLocaleString()}</td>
+                                            <td className="py-2 text-right font-medium text-gray-900">₹{((item.quantity || 1) * (item.rate || item.price || 0)).toLocaleString()}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="border-t-2 border-gray-300">
+                                          <td colSpan={3} className="py-2 font-semibold text-gray-900">Total</td>
+                                          <td className="py-2 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <div className="font-semibold text-sm" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</div>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                    {invoice.paid ? 'Paid' : 'Pending'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  {invoice.invoiceFile && (
-                                    <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
-                                    <FileText className="w-4 h-4" />
-                                  </button>
-                                  )}
-                                  <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
-                                    <Upload className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                     </div>
                     )}
