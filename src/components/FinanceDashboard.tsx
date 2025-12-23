@@ -292,9 +292,32 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       <div className="flex-1 overflow-auto">
         {/* Top Header */}
         <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
-            <p className="text-gray-400 text-sm">Track payments and spending trends</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
+              <p className="text-gray-400 text-sm">Track payments and spending trends</p>
+            </div>
+            {/* View Toggle - Top Right */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('chart')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'chart' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Chart
+              </button>
+            </div>
           </div>
         </div>
 
@@ -305,9 +328,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setFilterTab('all')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'all' 
-                    ? 'text-white' 
+                    ? 'text-white shadow-md' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
                 style={filterTab === 'all' ? { backgroundColor: '#2D60FF' } : {}}
@@ -316,9 +339,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </button>
               <button
                 onClick={() => setFilterTab('paid')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'paid' 
-                    ? 'text-white' 
+                    ? 'text-white shadow-md' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
                 style={filterTab === 'paid' ? { backgroundColor: '#2D60FF' } : {}}
@@ -327,9 +350,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </button>
               <button
                 onClick={() => setFilterTab('pending')}
-                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'pending' 
-                    ? 'text-white' 
+                    ? 'text-white shadow-md' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
                 style={filterTab === 'pending' ? { backgroundColor: '#2D60FF' } : {}}
@@ -339,22 +362,22 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             </div>
 
             {/* Right: Stats + Filter */}
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-gray-400 flex-shrink-0" />
                 <div>
                   <div className="text-xs text-gray-400">Total Paid</div>
                   <div className="text-lg font-bold text-gray-900">₹{totalPaid.toLocaleString()}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-gray-400" />
+              <div className="flex items-center gap-3">
+                <DollarSign className="w-5 h-5 text-gray-400 flex-shrink-0" />
                 <div>
                   <div className="text-xs text-gray-400">Pending</div>
                   <div className="text-lg font-bold text-gray-900">₹{totalPending.toLocaleString()}</div>
                 </div>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+              <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 <List className="w-4 h-4" />
                 Filter
               </button>
@@ -363,20 +386,99 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         </div>
 
         {/* Content Area */}
-        <div className="px-6 py-4">
-          {/* List View */}
+        <div className="px-8 py-6">
+          {viewMode === 'chart' ? (
+            /* Chart View */
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Monthly Spending Trend</h3>
+                    <p className="text-sm text-gray-500 mt-1">Overview of monthly expenses</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-400">Total</div>
+                    <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
+                      ₹{totalPaid.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#27AE60" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#27AE60" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                      />
+                      <YAxis 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="amount" 
+                        stroke="#27AE60" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorAmount)"
+                        dot={{ r: 6, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
+                        activeDot={{ r: 8, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Monthly Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                {monthOrder.slice(-6).map(monthKey => {
+                  const monthShoots = groupedInvoices[monthKey] || [];
+                  const total = getMonthTotal(monthShoots);
+                  
+                  return (
+                    <div
+                      key={monthKey}
+                      className="bg-white rounded-xl border border-gray-200 p-4"
+                      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                    >
+                      <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: '#27AE60' }}>₹{total.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400 mt-1">{monthShoots.length} shoots</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* List View */
             <div className="space-y-4">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
-              if (!monthInvoices || monthInvoices.length === 0) return null;
+                if (!monthInvoices || monthInvoices.length === 0) return null;
                 
                 const isExpanded = expandedMonths.has(monthKey);
                 const monthTotal = getMonthTotal(monthInvoices);
                 const paidCount = getMonthPaidCount(monthInvoices);
               
-              return (
+                return (
                   <div key={monthKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                    <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                    <button onClick={() => toggleMonth(monthKey)} className="w-full px-6 py-5 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                         <div className="text-left">
@@ -384,9 +486,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                           <div className="text-sm text-gray-500">{monthInvoices.length} shoots • {paidCount} paid</div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right pr-2">
                         <div className="text-lg font-bold" style={{ color: '#27AE60' }}>₹{monthTotal.toLocaleString()}</div>
-                  </div>
+                      </div>
                     </button>
                     
                     {isExpanded && (
@@ -484,6 +586,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
