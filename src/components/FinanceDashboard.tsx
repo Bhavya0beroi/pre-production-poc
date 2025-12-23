@@ -95,6 +95,16 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return groups;
   };
 
+  // Helper to safely parse amount as number
+  const parseAmount = (shoot: Shoot): number => {
+    const amount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
+    // Handle string amounts by parsing them
+    if (typeof amount === 'string') {
+      return parseFloat(amount) || 0;
+    }
+    return Number(amount) || 0;
+  };
+
   // Filter invoice data
   const getInvoiceData = () => {
     let filtered = shoots.filter(s => 
@@ -112,7 +122,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return filtered.map(shoot => ({
       ...shoot,
       vendor: 'Gopala Digital World',
-      amount: shoot.approvedAmount || shoot.vendorQuote?.amount || 0,
+      amount: parseAmount(shoot),
     }));
   };
 
@@ -122,9 +132,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   // Sort months in reverse chronological order (newest first)
   const monthOrder = Object.keys(groupedInvoices).sort((a, b) => b.localeCompare(a));
 
-  // Calculate totals
-  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
-  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
+  // Calculate totals - ensure numeric addition
+  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + parseAmount(s), 0);
+  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + parseAmount(s), 0);
   const totalShoots = invoiceData.length;
 
   const toggleMonth = (monthKey: string) => {
@@ -143,7 +153,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   };
 
   const getMonthTotal = (monthShoots: Shoot[]) => {
-    return monthShoots.reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
+    return monthShoots.reduce((sum, s) => sum + parseAmount(s), 0);
   };
 
   const getMonthPaidCount = (monthShoots: Shoot[]) => {
@@ -417,25 +427,27 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                 </span>
                               </div>
                               
-                              {invoice.paid ? (
-                                <button 
-                                  onClick={() => openPdfViewer(invoice)}
-                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-blue-50"
-                                  style={{ color: '#2D60FF' }}
-                                >
-                                  <FileText className="w-4 h-4" />
-                                  View
-                                </button>
-                              ) : (
+                              <div className="flex items-center gap-2">
+                                {invoice.invoiceFile && (
+                                  <button 
+                                    onClick={() => openPdfViewer(invoice)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-blue-50"
+                                    style={{ color: '#2D60FF' }}
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                    View
+                                  </button>
+                                )}
                                 <button 
                                   onClick={() => onUploadInvoice(invoice.id)}
-                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border-2"
-                                  style={{ borderColor: '#F2994A', color: '#F2994A' }}
+                                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border"
+                                  style={{ borderColor: '#E5E7EB', color: '#6B7280' }}
+                                  title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}
                                 >
                                   <Upload className="w-4 h-4" />
-                                  Upload
+                                  {invoice.invoiceFile ? 'Replace' : 'Upload'}
                                 </button>
-                              )}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -487,7 +499,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <div className="p-4 rounded-xl" style={{ backgroundColor: '#F0FDF4' }}>
                   <div className="text-sm mb-1" style={{ color: '#27AE60' }}>Amount Paid</div>
                   <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
-                    ₹{(selectedInvoice.approvedAmount || selectedInvoice.vendorQuote?.amount || 0).toLocaleString()}
+                    ₹{parseAmount(selectedInvoice).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-gray-50">
@@ -562,4 +574,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     </div>
   );
 }
+
+
+
+
 
