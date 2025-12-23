@@ -102,3 +102,4 @@ INSERT INTO catalog_items (id, name, daily_rate, category, last_updated) VALUES
   ('132', 'Transportation (Outstation)', 5000, 'Transport', 'Dec 10')
 ON CONFLICT (id) DO NOTHING;
 
+

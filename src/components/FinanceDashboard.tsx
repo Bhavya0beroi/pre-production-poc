@@ -9,7 +9,11 @@ import {
   Upload,
   X,
   Download,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  TrendingUp
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +34,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
   const openPdfViewer = (shoot: Shoot) => {
@@ -40,9 +45,37 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   // Month name mappings
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                       'July', 'August', 'September', 'October', 'November', 'December'];
-  const shortMonthMap: { [key: string]: number } = {
-    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // Parse date and get month/year
+  const getMonthYear = (shoot: Shoot): { month: number; year: number } => {
+    const dateStr = shoot.date;
+    
+    // Try ISO format first (YYYY-MM-DD)
+    if (dateStr && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const [year, month] = dateStr.split('-').map(Number);
+      return { month: month - 1, year };
+    }
+    
+    // Try parsing shootDate
+    if (shoot.shootDate) {
+      const d = new Date(shoot.shootDate);
+      if (!isNaN(d.getTime())) {
+        return { month: d.getMonth(), year: d.getFullYear() };
+      }
+    }
+    
+    // Try to find month name in date string
+    for (let i = 0; i < shortMonthNames.length; i++) {
+      if (dateStr?.includes(shortMonthNames[i])) {
+        return { month: i, year: new Date().getFullYear() };
+      }
+    }
+    
+    // Default to current month
+    const now = new Date();
+    return { month: now.getMonth(), year: now.getFullYear() };
   };
 
   // Group shoots by month
@@ -50,30 +83,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     const groups: { [key: string]: Shoot[] } = {};
     
     shootList.forEach(shoot => {
-      const dateStr = shoot.date;
-      let monthIndex = -1;
-      let year = new Date().getFullYear();
-      
-      // Try to extract month from date string (e.g., "Dec 15 - Dec 18" or "Oct 12-13")
-      for (const [shortMonth, index] of Object.entries(shortMonthMap)) {
-        if (dateStr.includes(shortMonth)) {
-          monthIndex = index;
-          break;
-        }
-      }
-      
-      // If shoot has shootDate, use that for accurate year
-      if (shoot.shootDate) {
-        const shootDateObj = new Date(shoot.shootDate);
-        if (!isNaN(shootDateObj.getTime())) {
-          monthIndex = shootDateObj.getMonth();
-          year = shootDateObj.getFullYear();
-        }
-      }
-      
-      if (monthIndex === -1) monthIndex = new Date().getMonth();
-      
-      const monthKey = `${monthNames[monthIndex]} ${year}`;
+      const { month, year } = getMonthYear(shoot);
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
       
       if (!groups[monthKey]) {
         groups[monthKey] = [];
@@ -82,19 +93,6 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     });
     
     return groups;
-  };
-
-  // Sort months chronologically
-  const sortMonthsChronologically = (months: string[]) => {
-    return months.sort((a, b) => {
-      const [monthA, yearA] = a.split(' ');
-      const [monthB, yearB] = b.split(' ');
-      const indexA = monthNames.indexOf(monthA);
-      const indexB = monthNames.indexOf(monthB);
-      const yearDiff = parseInt(yearA) - parseInt(yearB);
-      if (yearDiff !== 0) return yearDiff;
-      return indexA - indexB;
-    });
   };
 
   // Filter invoice data
@@ -113,17 +111,44 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
     return filtered.map(shoot => ({
       ...shoot,
-      vendor: 'Gopala Media',
+      vendor: 'Gopala Digital World',
       amount: shoot.approvedAmount || shoot.vendorQuote?.amount || 0,
     }));
   };
 
   const invoiceData = getInvoiceData();
   const groupedInvoices = groupByMonth(invoiceData);
-  const monthOrder = sortMonthsChronologically(Object.keys(groupedInvoices));
+  
+  // Sort months in reverse chronological order (newest first)
+  const monthOrder = Object.keys(groupedInvoices).sort((a, b) => b.localeCompare(a));
 
-  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + (s.approvedAmount || 0), 0);
-  const totalPending = shoots.filter(s => s.status === 'pending_invoice').reduce((sum, s) => sum + (s.approvedAmount || 0), 0);
+  // Calculate totals
+  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
+  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
+  const totalShoots = invoiceData.length;
+
+  const toggleMonth = (monthKey: string) => {
+    const newExpanded = new Set(expandedMonths);
+    if (newExpanded.has(monthKey)) {
+      newExpanded.delete(monthKey);
+    } else {
+      newExpanded.add(monthKey);
+    }
+    setExpandedMonths(newExpanded);
+  };
+
+  const formatMonthKey = (key: string) => {
+    const [year, month] = key.split('-');
+    return `${monthNames[parseInt(month)]} ${year}`;
+  };
+
+  const getMonthTotal = (monthShoots: Shoot[]) => {
+    return monthShoots.reduce((sum, s) => sum + (s.approvedAmount || s.vendorQuote?.amount || 0), 0);
+  };
+
+  const getMonthPaidCount = (monthShoots: Shoot[]) => {
+    return monthShoots.filter(s => s.paid).length;
+  };
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: '#F5F7FA' }}>
@@ -211,21 +236,60 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto">
-        {/* Top Header */}
+        {/* Top Header with Stats */}
         <div className="bg-white border-b border-gray-200 px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-gray-900">Invoice Management</h1>
-              <p className="text-gray-500 text-sm">Track payments and manage invoices</p>
-            </div>
-            <div className="flex gap-4">
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Total Paid</div>
-                <div className="text-xl" style={{ color: '#27AE60' }}>₹{totalPaid.toLocaleString()}</div>
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900">Finance & Invoices</h1>
+            <p className="text-gray-500 text-sm mt-1">Track payments and manage invoices</p>
+          </div>
+          
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm text-blue-600">Total Invoices</div>
+                  <div className="text-2xl font-bold text-blue-700">{totalShoots}</div>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Pending Payment</div>
-                <div className="text-xl" style={{ color: '#F2994A' }}>₹{totalPending.toLocaleString()}</div>
+            </div>
+            
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm text-green-600">Total Paid</div>
+                  <div className="text-2xl font-bold text-green-700">₹{totalPaid.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm text-orange-600">Pending</div>
+                  <div className="text-2xl font-bold text-orange-700">₹{totalPending.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-sm text-purple-600">Months</div>
+                  <div className="text-2xl font-bold text-purple-700">{monthOrder.length}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -233,131 +297,158 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
         {/* Filter Bar */}
         <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setFilterTab('all')}
-              className="px-4 py-2 rounded-lg text-sm transition-colors"
+              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
               style={{
-                backgroundColor: filterTab === 'all' ? '#EFF6FF' : 'transparent',
-                color: filterTab === 'all' ? '#2D60FF' : '#6B7280'
+                backgroundColor: filterTab === 'all' ? '#2D60FF' : '#F3F4F6',
+                color: filterTab === 'all' ? 'white' : '#6B7280'
               }}
             >
-              All
+              All ({invoiceData.length})
             </button>
             <button
               onClick={() => setFilterTab('paid')}
-              className="px-4 py-2 rounded-lg text-sm transition-colors"
+              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
               style={{
-                backgroundColor: filterTab === 'paid' ? '#E8F5E9' : 'transparent',
-                color: filterTab === 'paid' ? '#27AE60' : '#6B7280'
+                backgroundColor: filterTab === 'paid' ? '#27AE60' : '#F3F4F6',
+                color: filterTab === 'paid' ? 'white' : '#6B7280'
               }}
             >
-              Paid
+              Paid ({shoots.filter(s => s.paid).length})
             </button>
             <button
               onClick={() => setFilterTab('pending')}
-              className="px-4 py-2 rounded-lg text-sm transition-colors"
+              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
               style={{
-                backgroundColor: filterTab === 'pending' ? '#FEF3E2' : 'transparent',
-                color: filterTab === 'pending' ? '#F2994A' : '#6B7280'
+                backgroundColor: filterTab === 'pending' ? '#F2994A' : '#F3F4F6',
+                color: filterTab === 'pending' ? 'white' : '#6B7280'
               }}
             >
-              Pending Payment
+              Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
             </button>
-            <div className="ml-auto text-sm text-gray-500">
-              Sort by Month
-            </div>
           </div>
         </div>
 
-        {/* Invoice Table (Grouped by Month) */}
-        <div className="px-8 py-8">
-          <div className="space-y-8">
-            {monthOrder.map(month => {
-              const monthInvoices = groupedInvoices[month];
-              
+        {/* Monthly Accordion View */}
+        <div className="px-8 py-6">
+          <div className="space-y-4">
+            {monthOrder.map(monthKey => {
+              const monthInvoices = groupedInvoices[monthKey];
               if (!monthInvoices || monthInvoices.length === 0) return null;
               
+              const isExpanded = expandedMonths.has(monthKey);
+              const monthTotal = getMonthTotal(monthInvoices);
+              const paidCount = getMonthPaidCount(monthInvoices);
+              
               return (
-                <div key={month}>
-                  {/* Group Header */}
-                  <div className="mb-4">
-                    <h3 className="text-gray-900">{month}</h3>
-                  </div>
-
-                  {/* Month Table */}
-                  <div 
-                    className="bg-white rounded-xl border border-gray-200"
-                    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+                <div 
+                  key={monthKey}
+                  className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+                  style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                >
+                  {/* Month Header - Clickable */}
+                  <button
+                    onClick={() => toggleMonth(monthKey)}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Shoot Name</th>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Date</th>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Vendor</th>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Amount</th>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Status</th>
-                            <th className="px-6 py-3 text-left text-sm text-gray-700">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {monthInvoices.map((invoice) => (
-                            <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-6 py-4 text-gray-900">{invoice.name}</td>
-                              <td className="px-6 py-4 text-gray-600">{invoice.date}</td>
-                              <td className="px-6 py-4 text-gray-600">Gopala Media</td>
-                              <td className="px-6 py-4 text-gray-900">₹{invoice.amount.toLocaleString()}</td>
-                              <td className="px-6 py-4">
-                                {invoice.paid ? (
-                                  <span 
-                                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs"
-                                    style={{ backgroundColor: '#E8F5E9', color: '#27AE60' }}
-                                  >
-                                    Paid
-                                  </span>
-                                ) : (
-                                  <span 
-                                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs"
-                                    style={{ backgroundColor: '#FEF3E2', color: '#F2994A' }}
-                                  >
-                                    Pending
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4">
-                                {invoice.paid ? (
-                                  <button 
-                                    onClick={() => openPdfViewer(invoice)}
-                                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-                                  >
-                                    <FileText className="w-4 h-4" />
-                                    View PDF
-                                  </button>
-                                ) : (
-                                  <button 
-                                    onClick={() => onUploadInvoice(invoice.id)}
-                                    className="flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg text-sm transition-colors"
-                                    style={{ borderColor: '#F2994A', color: '#F2994A' }}
-                                  >
-                                    <Upload className="w-4 h-4" />
-                                    Upload Invoice
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="flex items-center gap-4">
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      )}
+                      <div className="text-left">
+                        <div className="font-semibold text-gray-900 text-lg">
+                          {formatMonthKey(monthKey)}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {monthInvoices.length} shoots • {paidCount} paid
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                    <div className="text-right">
+                      <div className="text-xl font-bold" style={{ color: '#27AE60' }}>
+                        ₹{monthTotal.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500">Total Amount</div>
+                    </div>
+                  </button>
+                  
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100">
+                      <div className="divide-y divide-gray-100">
+                        {monthInvoices.map((invoice) => (
+                          <div 
+                            key={invoice.id}
+                            className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div 
+                                className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                style={{ 
+                                  backgroundColor: invoice.paid ? '#E8F5E9' : '#FEF3E2',
+                                  color: invoice.paid ? '#27AE60' : '#F2994A'
+                                }}
+                              >
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{invoice.name}</div>
+                                <div className="text-sm text-gray-500">{invoice.date}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <div className="font-semibold text-gray-900">
+                                  ₹{invoice.amount.toLocaleString()}
+                                </div>
+                                <span 
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                                  style={{ 
+                                    backgroundColor: invoice.paid ? '#E8F5E9' : '#FEF3E2',
+                                    color: invoice.paid ? '#27AE60' : '#F2994A'
+                                  }}
+                                >
+                                  {invoice.paid ? 'Paid' : 'Pending'}
+                                </span>
+                              </div>
+                              
+                              {invoice.paid ? (
+                                <button 
+                                  onClick={() => openPdfViewer(invoice)}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-blue-50"
+                                  style={{ color: '#2D60FF' }}
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  View
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => onUploadInvoice(invoice.id)}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border-2"
+                                  style={{ borderColor: '#F2994A', color: '#F2994A' }}
+                                >
+                                  <Upload className="w-4 h-4" />
+                                  Upload
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
 
             {invoiceData.length === 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">No invoices found for the selected filter.</p>
               </div>
             )}
@@ -370,7 +461,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
           <div 
             className="bg-white rounded-2xl max-h-[90vh] overflow-hidden flex flex-col"
-            style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '600px' }}
+            style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '500px' }}
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
@@ -396,74 +487,35 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <div className="p-4 rounded-xl" style={{ backgroundColor: '#F0FDF4' }}>
                   <div className="text-sm mb-1" style={{ color: '#27AE60' }}>Amount Paid</div>
                   <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
-                    ₹{selectedInvoice.approvedAmount?.toLocaleString()}
+                    ₹{(selectedInvoice.approvedAmount || selectedInvoice.vendorQuote?.amount || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-gray-50">
-                  <div className="text-sm text-gray-500 mb-1">Payment Date</div>
+                  <div className="text-sm text-gray-500 mb-1">Date</div>
                   <div className="text-lg font-semibold text-gray-900">{selectedInvoice.date}</div>
                 </div>
               </div>
 
-              {/* Invoice File Preview */}
+              {/* Invoice File */}
               <div className="mb-6">
                 <div className="text-sm font-medium text-gray-700 mb-3">Invoice Document</div>
                 <div 
-                  className="border-2 rounded-xl p-6"
+                  className="border-2 rounded-xl p-4"
                   style={{ borderColor: '#27AE60', backgroundColor: '#F0FDF4' }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div 
-                        className="w-12 h-12 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: '#27AE60' }}
-                      >
-                        <FileText className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {selectedInvoice.invoiceFile?.name || 'invoice.pdf'}
-                        </div>
-                        <div className="text-sm" style={{ color: '#27AE60' }}>
-                          PDF Document • Ready to download
-                        </div>
-                      </div>
+                  <div className="flex items-center gap-4">
+                    <div 
+                      className="w-12 h-12 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: '#27AE60' }}
+                    >
+                      <FileText className="w-6 h-6 text-white" />
                     </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* PDF Preview Area */}
-              <div className="mb-6">
-                <div className="text-sm font-medium text-gray-700 mb-3">Preview</div>
-                <div 
-                  className="border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-50"
-                  style={{ height: '250px' }}
-                >
-                  <div className="h-full flex flex-col items-center justify-center">
-                    <FileText className="w-16 h-16 text-gray-300 mb-4" />
-                    <div className="bg-white rounded-lg border border-gray-200 p-4 max-w-xs w-full">
-                      <div className="text-center mb-4">
-                        <div className="text-sm text-gray-500 mb-1">INVOICE</div>
-                        <div className="text-xs text-gray-400">
-                          #{selectedInvoice.id.toUpperCase().slice(0, 8)}
-                        </div>
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {selectedInvoice.invoiceFile?.name || 'invoice.pdf'}
                       </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Shoot</span>
-                          <span className="text-gray-900">{selectedInvoice.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Vendor</span>
-                          <span className="text-gray-900">Gopala Media</span>
-                        </div>
-                        <div className="border-t border-gray-200 pt-2 flex justify-between font-medium">
-                          <span>Total</span>
-                          <span style={{ color: '#27AE60' }}>
-                            ₹{selectedInvoice.approvedAmount?.toLocaleString()}
-                          </span>
-                        </div>
+                      <div className="text-sm" style={{ color: '#27AE60' }}>
+                        PDF Document
                       </div>
                     </div>
                   </div>
@@ -472,19 +524,19 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
               {/* Shoot Details */}
               <div>
-                <div className="text-sm font-medium text-gray-700 mb-3">Shoot Details</div>
-                <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-700 mb-3">Details</div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Vendor</span>
+                    <span className="text-gray-900">Gopala Digital World</span>
+                  </div>
                   <div className="flex justify-between py-2 border-b border-gray-100">
                     <span className="text-gray-500">Location</span>
                     <span className="text-gray-900">{selectedInvoice.location}</span>
                   </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
+                  <div className="flex justify-between py-2">
                     <span className="text-gray-500">Duration</span>
                     <span className="text-gray-900">{selectedInvoice.duration}</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-500">Equipment Items</span>
-                    <span className="text-gray-900">{selectedInvoice.equipment.length} items</span>
                   </div>
                 </div>
               </div>
@@ -492,34 +544,17 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-100">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    // Simulate download
-                    const link = document.createElement('a');
-                    link.href = '#';
-                    link.download = selectedInvoice.invoiceFile?.name || 'invoice.pdf';
-                    alert(`Downloading: ${selectedInvoice.invoiceFile?.name || 'invoice.pdf'}`);
-                  }}
-                  className="flex-1 py-3 rounded-lg border-2 transition-colors font-medium flex items-center justify-center gap-2 hover:bg-blue-50"
-                  style={{ borderColor: '#2D60FF', color: '#2D60FF' }}
-                >
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => {
-                    // Simulate open in new tab
-                    alert('Opening PDF in new tab...');
-                    window.open('#', '_blank');
-                  }}
-                  className="flex-1 px-5 py-2.5 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
-                  style={{ backgroundColor: '#2D60FF' }}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Open in New Tab
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setShowPdfModal(false);
+                  setSelectedInvoice(null);
+                }}
+                className="w-full py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
+                style={{ backgroundColor: '#2D60FF' }}
+              >
+                <Download className="w-4 h-4" />
+                Download Invoice
+              </button>
             </div>
           </div>
         </div>
@@ -527,3 +562,4 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     </div>
   );
 }
+
