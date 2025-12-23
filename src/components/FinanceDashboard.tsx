@@ -58,11 +58,20 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
   // Helper to safely parse amount as number
   const parseAmount = (shoot: Shoot): number => {
-    const amount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
+    // Try approved amount first, then vendor quote
+    let amount = shoot.approvedAmount ?? shoot.vendorQuote?.amount ?? 0;
+    
+    // Handle string amounts (from database)
     if (typeof amount === 'string') {
-      return parseFloat(amount) || 0;
+      // Remove any non-numeric characters except decimal point
+      const cleaned = amount.replace(/[^0-9.]/g, '');
+      const parsed = parseFloat(cleaned);
+      return isNaN(parsed) ? 0 : parsed;
     }
-    return Number(amount) || 0;
+    
+    // Ensure it's a valid number
+    const num = Number(amount);
+    return isNaN(num) ? 0 : num;
   };
 
   // Parse date and get month/year
@@ -133,9 +142,13 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const groupedInvoices = groupByMonth(invoiceData);
   const monthOrder = Object.keys(groupedInvoices).sort((a, b) => a.localeCompare(b));
 
-  // Calculate totals
-  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + parseAmount(s), 0);
-  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + parseAmount(s), 0);
+  // Calculate totals - explicitly ensure numeric addition
+  const totalPaid = shoots.filter(s => s.paid).reduce((sum: number, s) => {
+    return Number(sum) + parseAmount(s);
+  }, 0);
+  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum: number, s) => {
+    return Number(sum) + parseAmount(s);
+  }, 0);
   const totalShoots = invoiceData.length;
 
   const toggleMonth = (monthKey: string) => {
@@ -159,7 +172,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   };
 
   const getMonthTotal = (monthShoots: Shoot[]) => {
-    return monthShoots.reduce((sum, s) => sum + parseAmount(s), 0);
+    return monthShoots.reduce((sum: number, s) => Number(sum) + parseAmount(s), 0);
   };
 
   const getMonthPaidCount = (monthShoots: Shoot[]) => {
@@ -193,7 +206,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         if (!dailyData[dayKey]) {
           dailyData[dayKey] = { amount: 0, shoots: 0 };
         }
-        dailyData[dayKey].amount += parseAmount(shoot);
+        dailyData[dayKey].amount = Number(dailyData[dayKey].amount) + parseAmount(shoot);
         dailyData[dayKey].shoots += 1;
       });
       
