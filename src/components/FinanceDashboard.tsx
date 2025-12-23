@@ -108,40 +108,24 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return groups;
   };
 
-  // Helper to check if invoice PDF is uploaded
-  const hasInvoicePdf = (shoot: Shoot): boolean => {
-    return !!(shoot.invoiceFile?.data);
-  };
-
-  // Get all completed/invoiceable shoots
-  const allInvoiceShoots = shoots.filter(s => 
+  // Filter invoice data
+  const getInvoiceData = () => {
+    let filtered = shoots.filter(s => 
       s.status === 'pending_invoice' || 
       s.status === 'completed' || 
-    s.paid ||
-    s.approved
-  );
-
-  // Counts for filter tabs
-  const paidCount = allInvoiceShoots.filter(s => hasInvoicePdf(s)).length;
-  const pendingCount = allInvoiceShoots.filter(s => !hasInvoicePdf(s)).length;
-
-  // Filter invoice data based on PDF upload status
-  const getInvoiceData = () => {
-    let filtered = [...allInvoiceShoots];
+      s.paid
+    );
 
     if (filterTab === 'paid') {
-      // "Paid" = has invoice PDF uploaded
-      filtered = filtered.filter(s => hasInvoicePdf(s));
+      filtered = filtered.filter(s => s.paid);
     } else if (filterTab === 'pending') {
-      // "Pending" = no invoice PDF uploaded yet
-      filtered = filtered.filter(s => !hasInvoicePdf(s));
+      filtered = filtered.filter(s => !s.paid);
     }
 
     return filtered.map(shoot => ({
       ...shoot,
       vendor: 'Gopala Digital World',
       amount: parseAmount(shoot),
-      hasPdf: hasInvoicePdf(shoot),
     }));
   };
 
@@ -149,9 +133,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const groupedInvoices = groupByMonth(invoiceData);
   const monthOrder = Object.keys(groupedInvoices).sort((a, b) => a.localeCompare(b));
 
-  // Calculate totals based on PDF upload status
-  const totalPaid = allInvoiceShoots.filter(s => hasInvoicePdf(s)).reduce((sum, s) => sum + parseAmount(s), 0);
-  const totalPending = allInvoiceShoots.filter(s => !hasInvoicePdf(s)).reduce((sum, s) => sum + parseAmount(s), 0);
+  // Calculate totals
+  const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + parseAmount(s), 0);
+  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + parseAmount(s), 0);
   const totalShoots = invoiceData.length;
 
   const toggleMonth = (monthKey: string) => {
@@ -179,7 +163,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   };
 
   const getMonthPaidCount = (monthShoots: Shoot[]) => {
-    return monthShoots.filter(s => hasInvoicePdf(s)).length;
+    return monthShoots.filter(s => s.paid).length;
   };
 
   // Chart data
@@ -333,7 +317,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <TrendingUp className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <div className="text-xs text-gray-500">With Invoice</div>
+                <div className="text-xs text-gray-500">Total Paid</div>
                 <div className="text-xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</div>
               </div>
             </div>
@@ -343,7 +327,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <DollarSign className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <div className="text-xs text-gray-500">Need Invoice</div>
+                <div className="text-xs text-gray-500">Pending</div>
                 <div className="text-xl font-bold text-orange-600">₹{totalPending.toLocaleString()}</div>
               </div>
             </div>
@@ -365,30 +349,30 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
-            <button
-              onClick={() => setFilterTab('all')}
+              <button
+                onClick={() => setFilterTab('all')}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                All ({allInvoiceShoots.length})
-            </button>
-            <button
-              onClick={() => setFilterTab('paid')}
+                All ({invoiceData.length})
+              </button>
+              <button
+                onClick={() => setFilterTab('paid')}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'paid' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                With Invoice ({paidCount})
-            </button>
-            <button
-              onClick={() => setFilterTab('pending')}
+                Paid ({shoots.filter(s => s.paid).length})
+              </button>
+              <button
+                onClick={() => setFilterTab('pending')}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'pending' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Need Invoice ({pendingCount})
-            </button>
+                Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
+              </button>
             </div>
 
             {/* Chart view controls */}
@@ -538,20 +522,20 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="space-y-4">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
-              if (!monthInvoices || monthInvoices.length === 0) return null;
+                if (!monthInvoices || monthInvoices.length === 0) return null;
                 
                 const isExpanded = expandedMonths.has(monthKey);
                 const monthTotal = getMonthTotal(monthInvoices);
                 const paidCount = getMonthPaidCount(monthInvoices);
-              
-              return (
+                
+                return (
                   <div key={monthKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                     <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
                         <div className="text-left">
                           <div className="font-semibold text-gray-900">{formatMonthKey(monthKey)}</div>
-                          <div className="text-sm text-gray-500">{monthInvoices.length} shoots • {paidCount} with invoice</div>
+                          <div className="text-sm text-gray-500">{monthInvoices.length} shoots • {paidCount} paid</div>
                         </div>
                       </div>
                       <div className="text-right">
@@ -565,32 +549,28 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                           {monthInvoices.map((invoice) => (
                             <div key={invoice.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.hasPdf ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.paid ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
                                   <FileText className="w-4 h-4" />
                                 </div>
                                 <div>
                                   <div className="font-medium text-gray-900 text-sm">{invoice.name}</div>
-                                  <div className="text-xs text-gray-500">{invoice.date} • {invoice.invoiceFile?.name || 'No invoice'}</div>
+                                  <div className="text-xs text-gray-500">{invoice.date}</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
                                   <div className="font-semibold text-gray-900 text-sm">₹{invoice.amount.toLocaleString()}</div>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.hasPdf ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                    {invoice.hasPdf ? 'Invoice Uploaded' : 'Need Invoice'}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                    {invoice.paid ? 'Paid' : 'Pending'}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {invoice.hasPdf && (
-                                    <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View Invoice">
-                                    <FileText className="w-4 h-4" />
-                                  </button>
+                                  {invoice.invoiceFile && (
+                                    <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
+                                      <FileText className="w-4 h-4" />
+                                    </button>
                                   )}
-                                  <button 
-                                    onClick={() => onUploadInvoice(invoice.id)}
-                                    className={`p-2 rounded-lg transition-colors ${invoice.hasPdf ? 'text-gray-400 hover:bg-gray-100' : 'text-orange-500 hover:bg-orange-50'}`}
-                                    title={invoice.hasPdf ? 'Replace PDF' : 'Upload PDF'}
-                                  >
+                                  <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
                                     <Upload className="w-4 h-4" />
                                   </button>
                                 </div>
@@ -598,19 +578,19 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                             </div>
                           ))}
                         </div>
-                    </div>
+                      </div>
                     )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
 
-            {invoiceData.length === 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              {invoiceData.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
                   <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No invoices found for the selected filter.</p>
-              </div>
-            )}
-          </div>
+                  <p className="text-gray-500">No invoices found for the selected filter.</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -644,11 +624,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               <div className="mb-6">
                 <div className="text-sm font-medium text-gray-700 mb-3">Invoice Document</div>
                 <div className="border-2 rounded-xl p-4" style={{ borderColor: '#27AE60', backgroundColor: '#F0FDF4' }}>
-                    <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#27AE60' }}>
-                        <FileText className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
                       <div className="font-medium text-gray-900">{selectedInvoice.invoiceFile?.name || 'invoice.pdf'}</div>
                       <div className="text-sm" style={{ color: '#27AE60' }}>PDF Document</div>
                     </div>
@@ -658,9 +638,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-3">Details</div>
-                      <div className="space-y-2 text-sm">
+                <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b border-gray-100">
-                          <span className="text-gray-500">Vendor</span>
+                    <span className="text-gray-500">Vendor</span>
                     <span className="text-gray-900">Gopala Digital World</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-100">
@@ -678,9 +658,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="px-6 py-4 border-t border-gray-100">
               <div className="flex gap-3">
                 {selectedInvoice.invoiceFile?.data ? (
-                <button
-                  onClick={() => {
-                    const link = document.createElement('a');
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
                       link.href = selectedInvoice.invoiceFile!.data!;
                       link.download = selectedInvoice.invoiceFile!.name || 'invoice.pdf';
                       document.body.appendChild(link);
@@ -689,10 +669,10 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                     }}
                     className="flex-1 py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
                     style={{ backgroundColor: '#27AE60' }}
-                >
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </button>
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PDF
+                  </button>
                 ) : (
                   <button
                     onClick={() => onUploadInvoice(selectedInvoice.id)}
