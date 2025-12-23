@@ -357,39 +357,42 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         </div>
 
         {/* Tabs */}
-        <div className="bg-white border-b border-gray-200 px-8">
+        <div className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-0">
-            <button
-              onClick={() => setFilterTab('all')}
-                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setFilterTab('all')}
+                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'all' 
-                    ? 'border-blue-600 text-blue-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
+                style={filterTab === 'all' ? { backgroundColor: '#2D60FF' } : {}}
               >
                 All ({invoiceData.length})
-            </button>
-            <button
-              onClick={() => setFilterTab('paid')}
-                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+              </button>
+              <button
+                onClick={() => setFilterTab('paid')}
+                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'paid' 
-                    ? 'border-blue-600 text-blue-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
+                style={filterTab === 'paid' ? { backgroundColor: '#2D60FF' } : {}}
               >
                 Paid ({shoots.filter(s => s.paid).length})
-            </button>
-            <button
-              onClick={() => setFilterTab('pending')}
-                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+              </button>
+              <button
+                onClick={() => setFilterTab('pending')}
+                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'pending' 
-                    ? 'border-blue-600 text-blue-600' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
+                style={filterTab === 'pending' ? { backgroundColor: '#2D60FF' } : {}}
               >
                 Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
-            </button>
+              </button>
             </div>
 
             {/* Chart view controls */}
