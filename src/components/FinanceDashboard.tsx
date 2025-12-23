@@ -447,8 +447,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-500">Total Shown</div>
-                    <div className="text-2xl font-bold text-green-600">
-                      ₹{chartData.reduce((sum, d) => sum + d.amount, 0).toLocaleString()}
+                    <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
+                      ₹{chartData.reduce((sum, d) => Number(sum) + Number(d.amount), 0).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -523,7 +523,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                       }`}
                     >
                       <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
-                      <div className="text-xl font-bold text-gray-900 mt-1">₹{total.toLocaleString()}</div>
+                      <div className="text-xl font-bold mt-1" style={{ color: '#27AE60' }}>₹{total.toLocaleString()}</div>
                       <div className="text-xs text-gray-400 mt-1">{monthShoots.length} shoots</div>
                     </button>
                   );
@@ -552,7 +552,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-green-600">₹{monthTotal.toLocaleString()}</div>
+                        <div className="text-lg font-bold" style={{ color: '#27AE60' }}>₹{monthTotal.toLocaleString()}</div>
                       </div>
                     </button>
                     
@@ -572,7 +572,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
-                                  <div className="font-semibold text-gray-900 text-sm">₹{invoice.amount.toLocaleString()}</div>
+                                  <div className="font-semibold text-sm" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</div>
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                                     {invoice.paid ? 'Paid' : 'Pending'}
                                   </span>
