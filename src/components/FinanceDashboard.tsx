@@ -240,17 +240,20 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   // Chart data
   const chartData = useMemo(() => {
     if (chartView === 'monthly') {
-      return monthOrder.map(monthKey => {
+      const data = monthOrder.map(monthKey => {
         const monthShoots = groupedInvoices[monthKey] || [];
         const total = getMonthTotal(monthShoots);
+        const shootNames = monthShoots.map(s => s.title || s.name || 'Unnamed Shoot');
         return {
           name: formatShortMonth(monthKey),
           fullName: formatMonthKey(monthKey),
           monthKey,
           amount: total,
           shoots: monthShoots.length,
+          shootNames,
         };
       });
+      return data;
     } else {
       // Daily/Weekly view with date range
       if (!selectedStartDate || !selectedEndDate) return [];
@@ -632,7 +635,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 </div>
                 
                 {chartData.length > 0 ? (
-                  <div style={{ width: '100%', height: 320 }}>
+                  <div key={`chart-${chartView}`} style={{ width: '100%', height: 320 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
@@ -648,16 +651,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                           tick={{ fill: '#6B7280', fontSize: 12 }}
                           tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
                         />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            border: '1px solid #E5E7EB', 
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                          }}
-                          formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Amount']}
-                          labelFormatter={(label) => chartData.find(d => d.name === label)?.fullName || label}
-                        />
+                        <Tooltip content={<CustomTooltip />} />
                         <Line 
                           type="monotone" 
                           dataKey="amount" 
