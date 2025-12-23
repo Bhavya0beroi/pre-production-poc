@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   CheckCircle, 
@@ -9,12 +9,15 @@ import {
   Upload,
   X,
   Download,
-  ExternalLink,
   ChevronDown,
   ChevronRight,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  BarChart3,
+  List,
+  Filter
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
 
@@ -28,6 +31,8 @@ interface FinanceDashboardProps {
 }
 
 type FilterTab = 'all' | 'paid' | 'pending';
+type ViewMode = 'list' | 'chart';
+type ChartView = 'monthly' | 'daily';
 
 export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive }: FinanceDashboardProps) {
   const { isAdmin } = useAuth();
@@ -35,6 +40,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [chartView, setChartView] = useState<ChartView>('monthly');
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
   const openPdfViewer = (shoot: Shoot) => {
@@ -48,34 +56,39 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+  // Helper to safely parse amount as number
+  const parseAmount = (shoot: Shoot): number => {
+    const amount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
+    if (typeof amount === 'string') {
+      return parseFloat(amount) || 0;
+    }
+    return Number(amount) || 0;
+  };
+
   // Parse date and get month/year
-  const getMonthYear = (shoot: Shoot): { month: number; year: number } => {
+  const getMonthYear = (shoot: Shoot): { month: number; year: number; day: number } => {
     const dateStr = shoot.date;
     
-    // Try ISO format first (YYYY-MM-DD)
     if (dateStr && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-      const [year, month] = dateStr.split('-').map(Number);
-      return { month: month - 1, year };
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return { month: month - 1, year, day };
     }
     
-    // Try parsing shootDate
     if (shoot.shootDate) {
       const d = new Date(shoot.shootDate);
       if (!isNaN(d.getTime())) {
-        return { month: d.getMonth(), year: d.getFullYear() };
+        return { month: d.getMonth(), year: d.getFullYear(), day: d.getDate() };
       }
     }
     
-    // Try to find month name in date string
     for (let i = 0; i < shortMonthNames.length; i++) {
       if (dateStr?.includes(shortMonthNames[i])) {
-        return { month: i, year: new Date().getFullYear() };
+        return { month: i, year: new Date().getFullYear(), day: 1 };
       }
     }
     
-    // Default to current month
     const now = new Date();
-    return { month: now.getMonth(), year: now.getFullYear() };
+    return { month: now.getMonth(), year: now.getFullYear(), day: now.getDate() };
   };
 
   // Group shoots by month
@@ -93,16 +106,6 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     });
     
     return groups;
-  };
-
-  // Helper to safely parse amount as number
-  const parseAmount = (shoot: Shoot): number => {
-    const amount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
-    // Handle string amounts by parsing them
-    if (typeof amount === 'string') {
-      return parseFloat(amount) || 0;
-    }
-    return Number(amount) || 0;
   };
 
   // Filter invoice data
@@ -128,11 +131,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
   const invoiceData = getInvoiceData();
   const groupedInvoices = groupByMonth(invoiceData);
-  
-  // Sort months in reverse chronological order (newest first)
-  const monthOrder = Object.keys(groupedInvoices).sort((a, b) => b.localeCompare(a));
+  const monthOrder = Object.keys(groupedInvoices).sort((a, b) => a.localeCompare(b));
 
-  // Calculate totals - ensure numeric addition
+  // Calculate totals
   const totalPaid = shoots.filter(s => s.paid).reduce((sum, s) => sum + parseAmount(s), 0);
   const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum, s) => sum + parseAmount(s), 0);
   const totalShoots = invoiceData.length;
@@ -152,6 +153,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return `${monthNames[parseInt(month)]} ${year}`;
   };
 
+  const formatShortMonth = (key: string) => {
+    const [, month] = key.split('-');
+    return shortMonthNames[parseInt(month)];
+  };
+
   const getMonthTotal = (monthShoots: Shoot[]) => {
     return monthShoots.reduce((sum, s) => sum + parseAmount(s), 0);
   };
@@ -160,82 +166,97 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     return monthShoots.filter(s => s.paid).length;
   };
 
+  // Chart data
+  const chartData = useMemo(() => {
+    if (chartView === 'monthly') {
+      return monthOrder.map(monthKey => {
+        const monthShoots = groupedInvoices[monthKey] || [];
+        const total = getMonthTotal(monthShoots);
+        return {
+          name: formatShortMonth(monthKey),
+          fullName: formatMonthKey(monthKey),
+          monthKey,
+          amount: total,
+          shoots: monthShoots.length,
+        };
+      });
+    } else {
+      // Daily view for selected month
+      if (!selectedMonth || !groupedInvoices[selectedMonth]) return [];
+      
+      const monthShoots = groupedInvoices[selectedMonth];
+      const dailyData: { [key: string]: { amount: number; shoots: number } } = {};
+      
+      monthShoots.forEach(shoot => {
+        const { day } = getMonthYear(shoot);
+        const dayKey = String(day).padStart(2, '0');
+        if (!dailyData[dayKey]) {
+          dailyData[dayKey] = { amount: 0, shoots: 0 };
+        }
+        dailyData[dayKey].amount += parseAmount(shoot);
+        dailyData[dayKey].shoots += 1;
+      });
+      
+      return Object.keys(dailyData).sort().map(day => ({
+        name: `Day ${parseInt(day)}`,
+        fullName: `${formatMonthKey(selectedMonth)} - Day ${parseInt(day)}`,
+        amount: dailyData[day].amount,
+        shoots: dailyData[day].shoots,
+      }));
+    }
+  }, [chartView, selectedMonth, groupedInvoices, monthOrder]);
+
+  // Custom tooltip for chart
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200">
+          <p className="font-semibold text-gray-900 mb-2">{payload[0].payload.fullName}</p>
+          <p className="text-green-600 text-lg font-bold">₹{payload[0].value.toLocaleString()}</p>
+          <p className="text-gray-500 text-sm">{payload[0].payload.shoots} shoots</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="flex h-screen" style={{ backgroundColor: '#F5F7FA' }}>
       {/* Left Sidebar */}
-      <div 
-        className="w-64 flex flex-col"
-        style={{ backgroundColor: '#1F2937' }}
-      >
-        {/* Logo/Brand */}
+      <div className="w-64 flex flex-col" style={{ backgroundColor: '#1F2937' }}>
         <div className="px-6 py-6 border-b" style={{ borderColor: '#374151' }}>
           <h2 className="text-white text-xl">ShootFlow</h2>
         </div>
 
-        {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <button
-            onClick={onBack}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
+          <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <LayoutDashboard className="w-5 h-5" />
             <span>Active Shoots</span>
           </button>
-
-          <button
-            onClick={onOpenApprovals}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors relative hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
+          <button onClick={onOpenApprovals} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors relative hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <CheckCircle className="w-5 h-5" />
             <span>Approvals</span>
             {approvalsPending > 0 && (
-              <span 
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs"
-                style={{ backgroundColor: '#F2994A', color: 'white' }}
-              >
-                {approvalsPending}
-              </span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ backgroundColor: '#F2994A', color: 'white' }}>{approvalsPending}</span>
             )}
           </button>
-
-          <button
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors"
-            style={{ backgroundColor: '#2D60FF', color: 'white' }}
-          >
+          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors" style={{ backgroundColor: '#2D60FF', color: 'white' }}>
             <DollarSign className="w-5 h-5" />
             <span>Finance & Invoices</span>
           </button>
-
-          <button
-            onClick={onOpenCatalog}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
+          <button onClick={onOpenCatalog} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <Package className="w-5 h-5" />
             <span>Catalog</span>
           </button>
-
-          <button
-            onClick={onOpenArchive}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
+          <button onClick={onOpenArchive} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
         </nav>
 
-        {/* User Profile */}
         <div className="px-4 py-6 border-t" style={{ borderColor: '#374151' }}>
           <div className="flex items-center gap-3 px-4">
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white"
-              style={{ backgroundColor: '#2D60FF' }}
-            >
-              {isAdmin ? 'A' : 'PT'}
-            </div>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: '#2D60FF' }}>{isAdmin ? 'A' : 'PT'}</div>
             <div>
               <div className="text-white text-sm">{isAdmin ? 'Admin' : 'Pre-production Team'}</div>
               <div className="text-gray-400 text-xs">{isAdmin ? 'Administrator' : 'Team Member'}</div>
@@ -246,261 +267,353 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto">
-        {/* Top Header with Stats */}
-        <div className="bg-white border-b border-gray-200 px-8 py-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900">Finance & Invoices</h1>
-            <p className="text-gray-500 text-sm mt-1">Track payments and manage invoices</p>
+        {/* Top Header */}
+        <div className="bg-white border-b border-gray-200 px-8 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Finance & Invoices</h1>
+              <p className="text-gray-500 text-sm mt-1">Track payments and spending trends</p>
+            </div>
+            
+            {/* View Toggle */}
+            <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('chart')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'chart' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Chart
+              </button>
+            </div>
           </div>
-          
-          {/* Stats Cards */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm text-blue-600">Total Invoices</div>
-                  <div className="text-2xl font-bold text-blue-700">{totalShoots}</div>
-                </div>
+        </div>
+
+        {/* Stats Cards - Compact */}
+        <div className="bg-white border-b border-gray-200 px-8 py-4">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Total Invoices</div>
+                <div className="text-xl font-bold text-gray-900">{totalShoots}</div>
               </div>
             </div>
-            
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm text-green-600">Total Paid</div>
-                  <div className="text-2xl font-bold text-green-700">₹{totalPaid.toLocaleString()}</div>
-                </div>
+            <div className="w-px h-10 bg-gray-200" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Total Paid</div>
+                <div className="text-xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</div>
               </div>
             </div>
-            
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm text-orange-600">Pending</div>
-                  <div className="text-2xl font-bold text-orange-700">₹{totalPending.toLocaleString()}</div>
-                </div>
+            <div className="w-px h-10 bg-gray-200" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Pending</div>
+                <div className="text-xl font-bold text-orange-600">₹{totalPending.toLocaleString()}</div>
               </div>
             </div>
-            
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm text-purple-600">Months</div>
-                  <div className="text-2xl font-bold text-purple-700">{monthOrder.length}</div>
-                </div>
+            <div className="w-px h-10 bg-gray-200" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Months</div>
+                <div className="text-xl font-bold text-purple-600">{monthOrder.length}</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFilterTab('all')}
-              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
-              style={{
-                backgroundColor: filterTab === 'all' ? '#2D60FF' : '#F3F4F6',
-                color: filterTab === 'all' ? 'white' : '#6B7280'
-              }}
-            >
-              All ({invoiceData.length})
-            </button>
-            <button
-              onClick={() => setFilterTab('paid')}
-              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
-              style={{
-                backgroundColor: filterTab === 'paid' ? '#27AE60' : '#F3F4F6',
-                color: filterTab === 'paid' ? 'white' : '#6B7280'
-              }}
-            >
-              Paid ({shoots.filter(s => s.paid).length})
-            </button>
-            <button
-              onClick={() => setFilterTab('pending')}
-              className="px-4 py-2 rounded-full text-sm font-medium transition-all"
-              style={{
-                backgroundColor: filterTab === 'pending' ? '#F2994A' : '#F3F4F6',
-                color: filterTab === 'pending' ? 'white' : '#6B7280'
-              }}
-            >
-              Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
-            </button>
-          </div>
-        </div>
+        <div className="bg-white border-b border-gray-200 px-8 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <button
+                onClick={() => setFilterTab('all')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  filterTab === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                All ({invoiceData.length})
+              </button>
+              <button
+                onClick={() => setFilterTab('paid')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  filterTab === 'paid' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Paid ({shoots.filter(s => s.paid).length})
+              </button>
+              <button
+                onClick={() => setFilterTab('pending')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  filterTab === 'pending' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
+              </button>
+            </div>
 
-        {/* Monthly Accordion View */}
-        <div className="px-8 py-6">
-          <div className="space-y-4">
-            {monthOrder.map(monthKey => {
-              const monthInvoices = groupedInvoices[monthKey];
-              if (!monthInvoices || monthInvoices.length === 0) return null;
-              
-              const isExpanded = expandedMonths.has(monthKey);
-              const monthTotal = getMonthTotal(monthInvoices);
-              const paidCount = getMonthPaidCount(monthInvoices);
-              
-              return (
-                <div 
-                  key={monthKey}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-                  style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+            {/* Chart view controls */}
+            {viewMode === 'chart' && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">View by:</span>
+                <button
+                  onClick={() => { setChartView('monthly'); setSelectedMonth(null); }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    chartView === 'monthly' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
                 >
-                  {/* Month Header - Clickable */}
-                  <button
-                    onClick={() => toggleMonth(monthKey)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  Monthly
+                </button>
+                <button
+                  onClick={() => {
+                    setChartView('daily');
+                    if (!selectedMonth && monthOrder.length > 0) {
+                      setSelectedMonth(monthOrder[monthOrder.length - 1]);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    chartView === 'daily' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Daily
+                </button>
+                {chartView === 'daily' && (
+                  <select
+                    value={selectedMonth || ''}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="ml-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
                   >
-                    <div className="flex items-center gap-4">
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-400" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                      )}
-                      <div className="text-left">
-                        <div className="font-semibold text-gray-900 text-lg">
-                          {formatMonthKey(monthKey)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {monthInvoices.length} shoots • {paidCount} paid
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold" style={{ color: '#27AE60' }}>
-                        ₹{monthTotal.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-gray-500">Total Amount</div>
-                    </div>
-                  </button>
-                  
-                  {/* Expanded Content */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-100">
-                      <div className="divide-y divide-gray-100">
-                        {monthInvoices.map((invoice) => (
-                          <div 
-                            key={invoice.id}
-                            className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div 
-                                className="w-10 h-10 rounded-lg flex items-center justify-center"
-                                style={{ 
-                                  backgroundColor: invoice.paid ? '#E8F5E9' : '#FEF3E2',
-                                  color: invoice.paid ? '#27AE60' : '#F2994A'
-                                }}
-                              >
-                                <FileText className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900">{invoice.name}</div>
-                                <div className="text-sm text-gray-500">{invoice.date}</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <div className="font-semibold text-gray-900">
-                                  ₹{invoice.amount.toLocaleString()}
-                                </div>
-                                <span 
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                                  style={{ 
-                                    backgroundColor: invoice.paid ? '#E8F5E9' : '#FEF3E2',
-                                    color: invoice.paid ? '#27AE60' : '#F2994A'
-                                  }}
-                                >
-                                  {invoice.paid ? 'Paid' : 'Pending'}
-                                </span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2">
-                                {invoice.invoiceFile && (
-                                  <button 
-                                    onClick={() => openPdfViewer(invoice)}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-blue-50"
-                                    style={{ color: '#2D60FF' }}
-                                  >
-                                    <FileText className="w-4 h-4" />
-                                    View
-                                  </button>
-                                )}
-                                <button 
-                                  onClick={() => onUploadInvoice(invoice.id)}
-                                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border"
-                                  style={{ borderColor: '#E5E7EB', color: '#6B7280' }}
-                                  title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}
-                                >
-                                  <Upload className="w-4 h-4" />
-                                  {invoice.invoiceFile ? 'Replace' : 'Upload'}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {invoiceData.length === 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No invoices found for the selected filter.</p>
+                    {monthOrder.map(m => (
+                      <option key={m} value={m}>{formatMonthKey(m)}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
           </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="px-8 py-6">
+          {viewMode === 'chart' ? (
+            /* Chart View */
+            <div className="space-y-6">
+              {/* Main Chart */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {chartView === 'monthly' ? 'Monthly Spending Trend' : `Daily Spending - ${selectedMonth ? formatMonthKey(selectedMonth) : ''}`}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {chartView === 'monthly' ? 'Click on a point to see daily breakdown' : 'Spending by day of the month'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">Total Shown</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      ₹{chartData.reduce((sum, d) => sum + d.amount, 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                      onClick={(data) => {
+                        if (chartView === 'monthly' && data && data.activePayload) {
+                          setChartView('daily');
+                          setSelectedMonth(data.activePayload[0].payload.monthKey);
+                        }
+                      }}
+                    >
+                      <defs>
+                        <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#27AE60" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#27AE60" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                      />
+                      <YAxis 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="amount" 
+                        stroke="#27AE60" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorAmount)"
+                        dot={{ r: 6, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
+                        activeDot={{ r: 8, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
+                        style={{ cursor: chartView === 'monthly' ? 'pointer' : 'default' }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {chartView === 'monthly' && (
+                  <p className="text-center text-sm text-gray-400 mt-4">
+                    💡 Click on any point to see daily breakdown for that month
+                  </p>
+                )}
+              </div>
+
+              {/* Monthly Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                {monthOrder.slice(-6).map(monthKey => {
+                  const monthShoots = groupedInvoices[monthKey] || [];
+                  const total = getMonthTotal(monthShoots);
+                  const isSelected = selectedMonth === monthKey && chartView === 'daily';
+                  
+                  return (
+                    <button
+                      key={monthKey}
+                      onClick={() => { setChartView('daily'); setSelectedMonth(monthKey); }}
+                      className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
+                        isSelected ? 'border-green-500 ring-2 ring-green-100' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
+                      <div className="text-xl font-bold text-gray-900 mt-1">₹{total.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400 mt-1">{monthShoots.length} shoots</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* List View */
+            <div className="space-y-4">
+              {monthOrder.slice().reverse().map(monthKey => {
+                const monthInvoices = groupedInvoices[monthKey];
+                if (!monthInvoices || monthInvoices.length === 0) return null;
+                
+                const isExpanded = expandedMonths.has(monthKey);
+                const monthTotal = getMonthTotal(monthInvoices);
+                const paidCount = getMonthPaidCount(monthInvoices);
+                
+                return (
+                  <div key={monthKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                        <div className="text-left">
+                          <div className="font-semibold text-gray-900">{formatMonthKey(monthKey)}</div>
+                          <div className="text-sm text-gray-500">{monthInvoices.length} shoots • {paidCount} paid</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-green-600">₹{monthTotal.toLocaleString()}</div>
+                      </div>
+                    </button>
+                    
+                    {isExpanded && (
+                      <div className="border-t border-gray-100">
+                        <div className="divide-y divide-gray-100">
+                          {monthInvoices.map((invoice) => (
+                            <div key={invoice.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.paid ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900 text-sm">{invoice.name}</div>
+                                  <div className="text-xs text-gray-500">{invoice.date}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <div className="font-semibold text-gray-900 text-sm">₹{invoice.amount.toLocaleString()}</div>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${invoice.paid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                    {invoice.paid ? 'Paid' : 'Pending'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {invoice.invoiceFile && (
+                                    <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
+                                      <FileText className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
+                                    <Upload className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {invoiceData.length === 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No invoices found for the selected filter.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* PDF Preview Modal */}
       {showPdfModal && selectedInvoice && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
-          <div 
-            className="bg-white rounded-2xl max-h-[90vh] overflow-hidden flex flex-col"
-            style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '500px' }}
-          >
-            {/* Modal Header */}
+          <div className="bg-white rounded-2xl max-h-[90vh] overflow-hidden flex flex-col" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '500px' }}>
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Invoice Details</h2>
                 <p className="text-sm text-gray-500">{selectedInvoice.name}</p>
               </div>
-              <button
-                onClick={() => {
-                  setShowPdfModal(false);
-                  setSelectedInvoice(null);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+              <button onClick={() => { setShowPdfModal(false); setSelectedInvoice(null); }} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Content */}
             <div className="flex-1 overflow-auto p-6">
-              {/* Invoice Info */}
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-4 rounded-xl" style={{ backgroundColor: '#F0FDF4' }}>
                   <div className="text-sm mb-1" style={{ color: '#27AE60' }}>Amount Paid</div>
-                  <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
-                    ₹{parseAmount(selectedInvoice).toLocaleString()}
-                  </div>
+                  <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>₹{parseAmount(selectedInvoice).toLocaleString()}</div>
                 </div>
                 <div className="p-4 rounded-xl bg-gray-50">
                   <div className="text-sm text-gray-500 mb-1">Date</div>
@@ -508,33 +621,21 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 </div>
               </div>
 
-              {/* Invoice File */}
               <div className="mb-6">
                 <div className="text-sm font-medium text-gray-700 mb-3">Invoice Document</div>
-                <div 
-                  className="border-2 rounded-xl p-4"
-                  style={{ borderColor: '#27AE60', backgroundColor: '#F0FDF4' }}
-                >
+                <div className="border-2 rounded-xl p-4" style={{ borderColor: '#27AE60', backgroundColor: '#F0FDF4' }}>
                   <div className="flex items-center gap-4">
-                    <div 
-                      className="w-12 h-12 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: '#27AE60' }}
-                    >
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#27AE60' }}>
                       <FileText className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">
-                        {selectedInvoice.invoiceFile?.name || 'invoice.pdf'}
-                      </div>
-                      <div className="text-sm" style={{ color: '#27AE60' }}>
-                        PDF Document
-                      </div>
+                      <div className="font-medium text-gray-900">{selectedInvoice.invoiceFile?.name || 'invoice.pdf'}</div>
+                      <div className="text-sm" style={{ color: '#27AE60' }}>PDF Document</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Shoot Details */}
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-3">Details</div>
                 <div className="space-y-2 text-sm">
@@ -554,13 +655,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-100">
               <div className="flex gap-3">
                 {selectedInvoice.invoiceFile?.data ? (
                   <button
                     onClick={() => {
-                      // Download actual PDF
                       const link = document.createElement('a');
                       link.href = selectedInvoice.invoiceFile!.data!;
                       link.download = selectedInvoice.invoiceFile!.name || 'invoice.pdf';
@@ -581,14 +680,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                     style={{ borderColor: '#F2994A', color: '#F2994A' }}
                   >
                     <Upload className="w-4 h-4" />
-                    Upload PDF to Enable Download
+                    Upload PDF
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    setShowPdfModal(false);
-                    setSelectedInvoice(null);
-                  }}
+                  onClick={() => { setShowPdfModal(false); setSelectedInvoice(null); }}
                   className="px-6 py-3 rounded-lg border border-gray-300 text-gray-600 transition-colors font-medium hover:bg-gray-50"
                 >
                   Close
@@ -601,8 +697,3 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     </div>
   );
 }
-
-
-
-
-
