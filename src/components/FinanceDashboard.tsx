@@ -14,8 +14,7 @@ import {
   Calendar,
   TrendingUp,
   BarChart3,
-  List,
-  Filter
+  List
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { Shoot } from '../App';
@@ -357,35 +356,40 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
           </div>
         </div>
 
-        {/* Filter Bar */}
-        <div className="bg-white border-b border-gray-200 px-8 py-3">
+        {/* Tabs */}
+        <div className="bg-white border-b border-gray-200 px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <button
-                onClick={() => setFilterTab('all')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            <div className="flex items-center gap-0">
+            <button
+              onClick={() => setFilterTab('all')}
+                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+                  filterTab === 'all' 
+                    ? 'border-blue-600 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 All ({invoiceData.length})
-              </button>
-              <button
-                onClick={() => setFilterTab('paid')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'paid' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            </button>
+            <button
+              onClick={() => setFilterTab('paid')}
+                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+                  filterTab === 'paid' 
+                    ? 'border-blue-600 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Paid ({shoots.filter(s => s.paid).length})
-              </button>
-              <button
-                onClick={() => setFilterTab('pending')}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  filterTab === 'pending' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            </button>
+            <button
+              onClick={() => setFilterTab('pending')}
+                className={`px-5 py-3 text-sm font-medium transition-all border-b-2 ${
+                  filterTab === 'pending' 
+                    ? 'border-blue-600 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 Pending ({shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).length})
-              </button>
+            </button>
             </div>
 
             {/* Chart view controls */}
@@ -535,13 +539,13 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="space-y-4">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
-                if (!monthInvoices || monthInvoices.length === 0) return null;
+              if (!monthInvoices || monthInvoices.length === 0) return null;
                 
                 const isExpanded = expandedMonths.has(monthKey);
                 const monthTotal = getMonthTotal(monthInvoices);
                 const paidCount = getMonthPaidCount(monthInvoices);
-                
-                return (
+              
+              return (
                   <div key={monthKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                     <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
@@ -553,7 +557,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-bold" style={{ color: '#27AE60' }}>₹{monthTotal.toLocaleString()}</div>
-                      </div>
+                  </div>
                     </button>
                     
                     {isExpanded && (
@@ -580,8 +584,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                 <div className="flex items-center gap-1">
                                   {invoice.invoiceFile && (
                                     <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
-                                      <FileText className="w-4 h-4" />
-                                    </button>
+                                    <FileText className="w-4 h-4" />
+                                  </button>
                                   )}
                                   <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
                                     <Upload className="w-4 h-4" />
@@ -591,19 +595,19 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                             </div>
                           ))}
                         </div>
-                      </div>
+                    </div>
                     )}
-                  </div>
-                );
-              })}
-
-              {invoiceData.length === 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No invoices found for the selected filter.</p>
                 </div>
-              )}
-            </div>
+              );
+            })}
+
+            {invoiceData.length === 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No invoices found for the selected filter.</p>
+              </div>
+            )}
+          </div>
           )}
         </div>
       </div>
@@ -637,11 +641,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               <div className="mb-6">
                 <div className="text-sm font-medium text-gray-700 mb-3">Invoice Document</div>
                 <div className="border-2 rounded-xl p-4" style={{ borderColor: '#27AE60', backgroundColor: '#F0FDF4' }}>
-                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#27AE60' }}>
-                      <FileText className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
                       <div className="font-medium text-gray-900">{selectedInvoice.invoiceFile?.name || 'invoice.pdf'}</div>
                       <div className="text-sm" style={{ color: '#27AE60' }}>PDF Document</div>
                     </div>
@@ -651,9 +655,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-3">Details</div>
-                <div className="space-y-2 text-sm">
+                      <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Vendor</span>
+                          <span className="text-gray-500">Vendor</span>
                     <span className="text-gray-900">Gopala Digital World</span>
                   </div>
                   <div className="flex justify-between py-2 border-b border-gray-100">
@@ -671,9 +675,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <div className="px-6 py-4 border-t border-gray-100">
               <div className="flex gap-3">
                 {selectedInvoice.invoiceFile?.data ? (
-                  <button
-                    onClick={() => {
-                      const link = document.createElement('a');
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
                       link.href = selectedInvoice.invoiceFile!.data!;
                       link.download = selectedInvoice.invoiceFile!.name || 'invoice.pdf';
                       document.body.appendChild(link);
@@ -682,10 +686,10 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                     }}
                     className="flex-1 py-3 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
                     style={{ backgroundColor: '#27AE60' }}
-                  >
-                    <Download className="w-4 h-4" />
-                    Download PDF
-                  </button>
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </button>
                 ) : (
                   <button
                     onClick={() => onUploadInvoice(selectedInvoice.id)}
