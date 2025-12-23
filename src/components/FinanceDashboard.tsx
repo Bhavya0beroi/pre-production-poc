@@ -291,89 +291,21 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto">
         {/* Top Header */}
-        <div className="bg-white border-b border-gray-200 px-8 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Finance & Invoices</h1>
-              <p className="text-gray-500 text-sm mt-1">Track payments and spending trends</p>
-            </div>
-            
-            {/* View Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <List className="w-4 h-4" />
-                List
-              </button>
-              <button
-                onClick={() => setViewMode('chart')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'chart' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Chart
-              </button>
-            </div>
+        <div className="bg-white border-b border-gray-200 px-8 py-4">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
+            <p className="text-gray-400 text-sm">Track payments and spending trends</p>
           </div>
         </div>
 
-        {/* Stats Cards - Compact */}
-        <div className="bg-white border-b border-gray-200 px-8 py-4">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Total Invoices</div>
-                <div className="text-xl font-bold text-gray-900">{totalShoots}</div>
-              </div>
-            </div>
-            <div className="w-px h-10 bg-gray-200" />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Total Paid</div>
-                <div className="text-xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</div>
-              </div>
-            </div>
-            <div className="w-px h-10 bg-gray-200" />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Pending</div>
-                <div className="text-xl font-bold text-orange-600">₹{totalPending.toLocaleString()}</div>
-              </div>
-            </div>
-            <div className="w-px h-10 bg-gray-200" />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Months</div>
-                <div className="text-xl font-bold text-purple-600">{monthOrder.length}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
+        {/* Tabs + Stats Row */}
         <div className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
+            {/* Left: Tabs */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setFilterTab('all')}
-                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'all' 
                     ? 'text-white' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -384,7 +316,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </button>
               <button
                 onClick={() => setFilterTab('paid')}
-                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'paid' 
                     ? 'text-white' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -395,7 +327,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </button>
               <button
                 onClick={() => setFilterTab('pending')}
-                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
                   filterTab === 'pending' 
                     ? 'text-white' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -406,150 +338,33 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               </button>
             </div>
 
-            {/* Chart view controls */}
-            {viewMode === 'chart' && (
+            {/* Right: Stats + Filter */}
+            <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">View by:</span>
-                <button
-                  onClick={() => { setChartView('monthly'); setSelectedMonth(null); }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    chartView === 'monthly' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => {
-                    setChartView('daily');
-                    if (!selectedMonth && monthOrder.length > 0) {
-                      setSelectedMonth(monthOrder[monthOrder.length - 1]);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    chartView === 'daily' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Daily
-                </button>
-                {chartView === 'daily' && (
-                  <select
-                    value={selectedMonth || ''}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="ml-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white"
-                  >
-                    {monthOrder.map(m => (
-                      <option key={m} value={m}>{formatMonthKey(m)}</option>
-                    ))}
-                  </select>
-                )}
+                <TrendingUp className="w-5 h-5 text-gray-400" />
+                <div>
+                  <div className="text-xs text-gray-400">Total Paid</div>
+                  <div className="text-lg font-bold text-gray-900">₹{totalPaid.toLocaleString()}</div>
+                </div>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-gray-400" />
+                <div>
+                  <div className="text-xs text-gray-400">Pending</div>
+                  <div className="text-lg font-bold text-gray-900">₹{totalPending.toLocaleString()}</div>
+                </div>
+              </div>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+                <List className="w-4 h-4" />
+                Filter
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Content Area */}
-        <div className="px-8 py-6">
-          {viewMode === 'chart' ? (
-            /* Chart View */
-            <div className="space-y-6">
-              {/* Main Chart */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {chartView === 'monthly' ? 'Monthly Spending Trend' : `Daily Spending - ${selectedMonth ? formatMonthKey(selectedMonth) : ''}`}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {chartView === 'monthly' ? 'Click on a point to see daily breakdown' : 'Spending by day of the month'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500">Total Shown</div>
-                    <div className="text-2xl font-bold" style={{ color: '#27AE60' }}>
-                      ₹{chartData.reduce((sum, d) => Number(sum) + Number(d.amount), 0).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={chartData}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                      onClick={(data) => {
-                        if (chartView === 'monthly' && data && data.activePayload) {
-                          setChartView('daily');
-                          setSelectedMonth(data.activePayload[0].payload.monthKey);
-                        }
-                      }}
-                    >
-                      <defs>
-                        <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#27AE60" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#27AE60" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis 
-                        dataKey="name" 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#6B7280', fontSize: 12 }}
-                      />
-                      <YAxis 
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#6B7280', fontSize: 12 }}
-                        tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area 
-                        type="monotone" 
-                        dataKey="amount" 
-                        stroke="#27AE60" 
-                        strokeWidth={3}
-                        fillOpacity={1} 
-                        fill="url(#colorAmount)"
-                        dot={{ r: 6, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
-                        activeDot={{ r: 8, fill: '#27AE60', stroke: '#fff', strokeWidth: 2 }}
-                        style={{ cursor: chartView === 'monthly' ? 'pointer' : 'default' }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {chartView === 'monthly' && (
-                  <p className="text-center text-sm text-gray-400 mt-4">
-                    💡 Click on any point to see daily breakdown for that month
-                  </p>
-                )}
-              </div>
-
-              {/* Monthly Summary Cards */}
-              <div className="grid grid-cols-3 gap-4">
-                {monthOrder.slice(-6).map(monthKey => {
-                  const monthShoots = groupedInvoices[monthKey] || [];
-                  const total = getMonthTotal(monthShoots);
-                  const isSelected = selectedMonth === monthKey && chartView === 'daily';
-                  
-                  return (
-                    <button
-                      key={monthKey}
-                      onClick={() => { setChartView('daily'); setSelectedMonth(monthKey); }}
-                      className={`bg-white rounded-xl border p-4 text-left transition-all hover:shadow-md ${
-                        isSelected ? 'border-green-500 ring-2 ring-green-100' : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
-                      <div className="text-xl font-bold mt-1" style={{ color: '#27AE60' }}>₹{total.toLocaleString()}</div>
-                      <div className="text-xs text-gray-400 mt-1">{monthShoots.length} shoots</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* List View */
+        <div className="px-6 py-4">
+          {/* List View */}
             <div className="space-y-4">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
@@ -664,12 +479,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
             {invoiceData.length === 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">No invoices found for the selected filter.</p>
               </div>
             )}
           </div>
-          )}
         </div>
       </div>
 
