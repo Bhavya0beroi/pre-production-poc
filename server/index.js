@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -9,6 +10,318 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ============================================
+// EMAIL CONFIGURATION
+// ============================================
+
+// SMTP transporter setup for Gmail
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // TLS
+  auth: {
+    user: process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co',
+    pass: process.env.SMTP_PASS || 'xvtu kcpv mgsg gcvb'
+  }
+});
+
+// Verify email connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.log('❌ Email server connection failed:', error.message);
+  } else {
+    console.log('✅ Email server is ready to send messages');
+  }
+});
+
+// Email templates
+const emailTemplates = {
+  // 1. New shoot request created - notify vendor
+  newRequest: (shoot) => ({
+    subject: `🎬 New Equipment Request: ${shoot.name}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">New Equipment Request</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <h2 style="color: #333; margin-top: 0;">Hi,</h2>
+          <p style="color: #666; line-height: 1.6;">A new equipment request has been submitted and requires your quote.</p>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Request Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Duration:</td><td style="padding: 8px 0; color: #333;">${shoot.duration || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Requested by:</td><td style="padding: 8px 0; color: #333;">${shoot.requestor?.name || 'Team'}</td></tr>
+            </table>
+          </div>
+          
+          <h4 style="color: #333;">🎥 Equipment Required:</h4>
+          <ul style="color: #666; line-height: 1.8;">
+            ${(shoot.equipment || []).map(eq => `<li>${eq.name} ${eq.quantity ? `(Qty: ${eq.quantity})` : ''}</li>`).join('')}
+          </ul>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}?vendor=${shoot.id}" 
+               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+              Submit Your Quote →
+            </a>
+          </div>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow. Please do not reply directly to this email.
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  // 2. Vendor submits quote - notify approver
+  quoteSubmitted: (shoot) => ({
+    subject: `💰 Quote Received: ${shoot.name} - ₹${(shoot.vendorQuote?.amount || 0).toLocaleString()}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Quote Pending Approval</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <h2 style="color: #333; margin-top: 0;">Quote Received!</h2>
+          <p style="color: #666; line-height: 1.6;">A vendor quote has been submitted and requires your approval.</p>
+          
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="color: rgba(255,255,255,0.8); margin: 0; font-size: 14px;">QUOTED AMOUNT</p>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.vendorQuote?.amount || 0).toLocaleString()}</p>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Shoot Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
+            </table>
+          </div>
+          
+          ${shoot.vendorQuote?.notes ? `
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <p style="margin: 0; color: #856404;"><strong>Vendor Notes:</strong> ${shoot.vendorQuote.notes}</p>
+          </div>
+          ` : ''}
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}" 
+               style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
+              ✓ Review & Approve
+            </a>
+          </div>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow.
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  // 3. Quote approved - notify requestor & vendor
+  quoteApproved: (shoot) => ({
+    subject: `✅ Approved: ${shoot.name} - ₹${(shoot.approvedAmount || 0).toLocaleString()}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Quote Approved! 🎉</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <div style="width: 80px; height: 80px; background: #d4edda; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+              <span style="font-size: 40px;">✓</span>
+            </div>
+            <h2 style="color: #28a745; margin: 0;">Quote Approved!</h2>
+          </div>
+          
+          <p style="color: #666; line-height: 1.6; text-align: center;">The equipment request has been approved and is ready for the shoot.</p>
+          
+          <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="color: #155724; margin: 0; font-size: 14px;">APPROVED AMOUNT</p>
+            <p style="color: #28a745; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || 0).toLocaleString()}</p>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Shoot Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
+            </table>
+          </div>
+          
+          <h4 style="color: #333;">🎥 Approved Equipment:</h4>
+          <ul style="color: #666; line-height: 1.8;">
+            ${(shoot.equipment || []).map(eq => `<li>${eq.name} ${eq.quantity ? `(Qty: ${eq.quantity})` : ''}</li>`).join('')}
+          </ul>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow.
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  // 4. Quote rejected - notify requestor
+  quoteRejected: (shoot) => ({
+    subject: `❌ Quote Rejected: ${shoot.name}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Quote Rejected</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <h2 style="color: #dc3545; margin-top: 0;">Quote Not Approved</h2>
+          <p style="color: #666; line-height: 1.6;">Unfortunately, the quote for this shoot request has been rejected.</p>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Request Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Quoted Amount:</td><td style="padding: 8px 0; color: #333;">₹${(shoot.vendorQuote?.amount || 0).toLocaleString()}</td></tr>
+            </table>
+          </div>
+          
+          ${shoot.rejectionReason ? `
+          <div style="background: #f8d7da; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545;">
+            <p style="margin: 0; color: #721c24;"><strong>Reason:</strong> ${shoot.rejectionReason}</p>
+          </div>
+          ` : ''}
+          
+          <p style="color: #666; line-height: 1.6;">Please review the feedback and consider submitting a revised quote if applicable.</p>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow.
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  // 5. Invoice uploaded - notify finance
+  invoiceUploaded: (shoot) => ({
+    subject: `📄 Invoice Uploaded: ${shoot.name}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Invoice Ready for Payment</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <h2 style="color: #333; margin-top: 0;">📄 Invoice Uploaded</h2>
+          <p style="color: #666; line-height: 1.6;">An invoice has been uploaded for the following shoot and is ready for payment processing.</p>
+          
+          <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="color: #0056b3; margin: 0; font-size: 14px;">PAYMENT AMOUNT</p>
+            <p style="color: #004085; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || shoot.vendorQuote?.amount || 0).toLocaleString()}</p>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Invoice File:</td><td style="padding: 8px 0; color: #333;">${shoot.invoiceFile?.name || 'Uploaded'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+            </table>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}" 
+               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+              View in ShootFlow →
+            </a>
+          </div>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow.
+          </p>
+        </div>
+      </div>
+    `
+  }),
+
+  // 6. Payment completed - notify vendor
+  paymentComplete: (shoot) => ({
+    subject: `💵 Payment Completed: ${shoot.name} - ₹${(shoot.approvedAmount || 0).toLocaleString()}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 30px; border-radius: 12px 12px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Payment Completed! 💰</p>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <div style="width: 80px; height: 80px; background: #d4edda; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+              <span style="font-size: 40px;">💵</span>
+            </div>
+            <h2 style="color: #28a745; margin: 0;">Payment Successful!</h2>
+          </div>
+          
+          <p style="color: #666; line-height: 1.6; text-align: center;">The payment for this shoot has been processed successfully.</p>
+          
+          <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <p style="color: #155724; margin: 0; font-size: 14px;">AMOUNT PAID</p>
+            <p style="color: #28a745; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || 0).toLocaleString()}</p>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #333; margin-top: 0;">📋 Payment Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Invoice:</td><td style="padding: 8px 0; color: #333;">${shoot.invoiceFile?.name || 'N/A'}</td></tr>
+              <tr><td style="padding: 8px 0; color: #666;">Payment Date:</td><td style="padding: 8px 0; color: #333;">${new Date().toLocaleDateString('en-IN')}</td></tr>
+            </table>
+          </div>
+          
+          <p style="color: #666; line-height: 1.6; text-align: center;">Thank you for your service! 🙏</p>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated message from ShootFlow.
+          </p>
+        </div>
+      </div>
+    `
+  })
+};
+
+// Send email function
+async function sendEmail(to, template, shoot) {
+  try {
+    const emailContent = emailTemplates[template](shoot);
+    
+    const mailOptions = {
+      from: {
+        name: 'ShootFlow',
+        address: process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co'
+      },
+      to: to,
+      subject: emailContent.subject,
+      html: emailContent.html
+    };
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✉️ Email sent: ${template} to ${to} - ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`❌ Email failed: ${template} to ${to}`, error.message);
+    return { success: false, error: error.message };
+  }
+}
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -218,6 +531,101 @@ app.post('/api/catalog/bulk', async (req, res) => {
     console.error('Error bulk saving catalog:', error);
     res.status(500).json({ error: 'Failed to save catalog items' });
   }
+});
+
+// ============================================
+// EMAIL API ENDPOINTS
+// ============================================
+
+// Send email endpoint
+app.post('/api/email/send', async (req, res) => {
+  try {
+    const { to, template, shoot } = req.body;
+    
+    if (!to || !template || !shoot) {
+      return res.status(400).json({ error: 'Missing required fields: to, template, shoot' });
+    }
+    
+    if (!emailTemplates[template]) {
+      return res.status(400).json({ error: `Invalid template: ${template}. Valid templates: ${Object.keys(emailTemplates).join(', ')}` });
+    }
+    
+    const result = await sendEmail(to, template, shoot);
+    
+    if (result.success) {
+      res.json({ success: true, messageId: result.messageId });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    console.error('Email API error:', error);
+    res.status(500).json({ error: 'Failed to send email', details: error.message });
+  }
+});
+
+// Batch send emails (for multi-recipient scenarios)
+app.post('/api/email/batch', async (req, res) => {
+  try {
+    const { emails } = req.body; // Array of { to, template, shoot }
+    
+    if (!emails || !Array.isArray(emails)) {
+      return res.status(400).json({ error: 'Missing or invalid emails array' });
+    }
+    
+    const results = await Promise.all(
+      emails.map(({ to, template, shoot }) => sendEmail(to, template, shoot))
+    );
+    
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    res.json({ 
+      success: true, 
+      summary: { total: emails.length, successful, failed },
+      results 
+    });
+  } catch (error) {
+    console.error('Batch email API error:', error);
+    res.status(500).json({ error: 'Failed to send batch emails', details: error.message });
+  }
+});
+
+// Test email endpoint
+app.post('/api/email/test', async (req, res) => {
+  try {
+    const testShoot = {
+      id: 'test-123',
+      name: 'Test Shoot',
+      date: new Date().toLocaleDateString('en-IN'),
+      location: 'Mumbai Studio',
+      duration: '1 day',
+      equipment: [
+        { name: 'Camera Sony A7III', quantity: 1 },
+        { name: 'Tripod', quantity: 2 }
+      ],
+      requestor: { name: 'Test User' },
+      vendorQuote: { amount: 25000, notes: 'Test quote' },
+      approvedAmount: 25000
+    };
+    
+    const to = req.body.to || process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
+    const template = req.body.template || 'newRequest';
+    
+    const result = await sendEmail(to, template, testShoot);
+    res.json({ success: result.success, message: result.success ? 'Test email sent!' : result.error });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ error: 'Failed to send test email', details: error.message });
+  }
+});
+
+// Get email configuration status
+app.get('/api/email/status', (req, res) => {
+  res.json({
+    configured: true,
+    smtpUser: (process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co').replace(/(.{3}).*(@.*)/, '$1***$2'),
+    templates: Object.keys(emailTemplates)
+  });
 });
 
 // Start server

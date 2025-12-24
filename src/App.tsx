@@ -12,6 +12,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
 import { isSupabaseConfigured } from './lib/supabase';
+import { 
+  emailNewRequest, 
+  emailQuoteSubmitted, 
+  emailQuoteApproved, 
+  emailQuoteRejected, 
+  emailInvoiceUploaded, 
+  emailPaymentComplete,
+  DEFAULT_RECIPIENTS 
+} from './services/emailService';
 
 // API URL for Railway backend
 const API_URL = 'https://divine-nature-production-c49a.up.railway.app';
@@ -223,97 +232,11 @@ function AppContent() {
   // EmailJS Configuration
   const EMAILJS_SERVICE_ID = 'service_vcb4aia';
   const EMAILJS_TEMPLATE_ID = 'template_dj4cn59';
-  const EMAILJS_QUOTE_TEMPLATE_ID = 'template_5nnn0d2';
+  // Email is now handled via SMTP through the backend API
+  // See src/services/emailService.ts for email functions
 
-  // Send real email using EmailJS
-  const sendRealEmail = async (
-    toEmail: string,
-    toName: string,
-    shootName: string,
-    dates: string,
-    itemCount: number,
-    budget: number,
-    shootId: string,
-    requestorName: string,
-    equipmentList: Array<{ name: string; dailyRate: number }> = []
-  ) => {
-    try {
-      // Format equipment list as text
-      const equipmentText = equipmentList.length > 0 
-        ? equipmentList.map(item => `${item.name} - Rs.${item.dailyRate.toLocaleString()}/day`).join('\n')
-        : 'No equipment selected';
-
-      // @ts-ignore - emailjs is loaded from CDN
-      const response = await window.emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_TEMPLATE_ID,
-        {
-          to_email: toEmail,
-          to_name: toName,
-          from_name: requestorName,
-          name: requestorName,
-          shoot_name: shootName,
-          dates: dates,
-          item_count: itemCount.toString(),
-          budget: budget.toLocaleString(),
-          equipment_list: equipmentText,
-          app_link: `${window.location.origin}?vendor=${shootId}`,
-          title: `New Shoot Request - ${shootName}`,
-          message: `Shoot: ${shootName}\nDates: ${dates}\nItems: ${itemCount}\nBudget: Rs.${budget.toLocaleString()}\n\nEquipment:\n${equipmentText}`,
-        }
-      );
-      console.log('Email sent successfully!', response);
-      return true;
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      return false;
-    }
-  };
-
-  // Send quote submission email using EmailJS
-  const sendQuoteSubmittedEmail = async (
-    toEmail: string,
-    toName: string,
-    shootName: string,
-    dates: string,
-    quoteAmount: number,
-    shootId: string,
-    equipment: Equipment[]
-  ) => {
-    try {
-      // Format equipment list for email with proper fallbacks
-      const equipmentList = equipment.map(item => {
-        const qty = item.quantity || 1;
-        const rate = item.dailyRate || 0;
-        const totalPrice = rate * qty;
-        return `${item.name} - Rs.${totalPrice.toLocaleString()}`;
-      }).join('\n');
-      
-      // @ts-ignore - emailjs is loaded from CDN
-      const response = await window.emailjs.send(
-        EMAILJS_SERVICE_ID,
-        EMAILJS_QUOTE_TEMPLATE_ID,
-        {
-          to_email: toEmail,
-          to_name: toName,
-          shoot_name: shootName,
-          dates: dates,
-          quote_amount: quoteAmount.toLocaleString(),
-          equipment_list: equipmentList || 'No equipment listed',
-          equipment_count: equipment.length.toString(),
-          app_link: window.location.origin,
-        }
-      );
-      console.log('Quote submission email sent successfully!', response);
-      return true;
-    } catch (error) {
-      console.error('Failed to send quote submission email:', error);
-      return false;
-    }
-  };
-
-  // Trigger email (both real and simulated)
-  const triggerEmail = (
+  // Trigger email via SMTP (real email) and add to UI notification thread
+  const triggerEmail = async (
     shootId: string, 
     shootName: string, 
     emailType: 'new_request' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'invoice_reminder' | 'invoice_uploaded',
@@ -326,6 +249,7 @@ function AppContent() {
       location?: string;
       requestorName?: string;
       equipmentList?: Array<{ name: string; dailyRate: number }>;
+      shoot?: Shoot;
     }
   ) => {
     const emailSubjects: Record<string, string> = {
@@ -337,127 +261,44 @@ function AppContent() {
       invoice_uploaded: `📄 Invoice Uploaded: ${shootName}`,
     };
 
-    const getEmailBody = (type: string): string => {
-      switch (type) {
-        case 'new_request':
-          const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
-          return `Hi ${recipientName},
-
-The ShootFlow team has submitted a new equipment requirement.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📌 Shoot Details:
-
-🎬 Shoot Name: ${shootName}
-📅 Dates: ${additionalData?.dates || 'TBD'}
-📦 Total Items: ${additionalData?.itemCount || 0} Items
-💰 Estimated Budget: ₹${(additionalData?.estimatedBudget || 0).toLocaleString()}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 Next Step: Please review the list and forward it to Gopala Media for a final quote.
-
-👉 Click Here to Review & Send to Vendor
-${window.location.origin}
-
-Best regards,
-ShootFlow Team`;
-          
-        case 'sent_to_vendor':
-          return `The equipment request for "${shootName}" has been sent to the vendor.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🔗 Vendor Quote Link:
-${window.location.origin}?vendor=${shootId}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 Next Step: Share this link with Gopala Media to receive their quote.`;
-          
-        case 'quote_submitted':
-          return `Great news! Gopala Media has submitted their quote for "${shootName}".
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📌 Quote Details:
-
-🎬 Shoot Name: ${shootName}
-💰 Quote Amount: ₹${(additionalData?.quoteAmount || 0).toLocaleString()}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 Next Step: Review the quote and send for founder approval.
-
-👉 Click Here to Review & Approve
-${window.location.origin}`;
-          
-        case 'approved':
-          return `🎉 The quote for "${shootName}" has been approved!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📌 Shoot Details:
-
-🎬 Shoot Name: ${shootName}
-📅 Dates: ${additionalData?.dates || 'TBD'}
-📍 Location: ${additionalData?.location || 'TBD'}
-💰 Approved Amount: ₹${(additionalData?.quoteAmount || 0).toLocaleString()}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ Status: Ready for Shoot
-
-📋 Next Step: After the shoot is completed, please upload the invoice.`;
-          
-        case 'invoice_reminder':
-          return `⏰ Reminder: Invoice Pending for "${shootName}"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-It has been 15 days since the shoot date.
-
-📋 Action Required: Please upload the invoice as soon as possible.
-
-👉 Click Here to Upload Invoice
-${window.location.origin}`;
-          
-        case 'invoice_uploaded':
-          return `✅ Invoice Successfully Uploaded for "${shootName}"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-The invoice has been received and is being processed.
-
-💳 Payment processing will begin shortly.`;
-          
-        default:
-          return '';
-      }
+    // Map email types to SMTP templates
+    const templateMap: Record<string, string> = {
+      new_request: 'newRequest',
+      sent_to_vendor: 'newRequest',
+      quote_submitted: 'quoteSubmitted',
+      approved: 'quoteApproved',
+      invoice_uploaded: 'invoiceUploaded',
     };
 
-    // Create the new email
+    // Get shoot data for email template
+    const shootData = additionalData?.shoot || shoots.find(s => s.id === shootId) || {
+      id: shootId,
+      name: shootName,
+      date: additionalData?.dates || 'TBD',
+      location: additionalData?.location || 'TBD',
+      equipment: additionalData?.equipmentList?.map(e => ({ name: e.name, dailyRate: e.dailyRate })) || [],
+      requestor: { name: additionalData?.requestorName || 'ShootFlow Team', email: recipientEmail },
+      vendorQuote: { amount: additionalData?.quoteAmount || 0, notes: '' },
+      approvedAmount: additionalData?.quoteAmount || 0,
+    };
+
+    // Create the email for UI notification
     const newEmail: EmailMessage = {
       id: Date.now().toString(),
-      from: emailType === 'quote_submitted' ? 'vendor@gopalamedia.com' : 'Bhavya.oberoi@learnapp.co',
+      from: emailType === 'quote_submitted' ? 'vendor@gopalamedia.com' : 'bhavya.oberoi@learnapp.co',
       to: recipientEmail,
       subject: emailSubjects[emailType],
-      body: getEmailBody(emailType),
+      body: `Email sent via SMTP for ${shootName}`,
       timestamp: new Date(),
       type: emailType === 'quote_submitted' ? 'received' : 'sent',
     };
 
     // Create notification with email thread
     const emailThread: EmailMessage[] = [];
-    
-    // Get existing thread if any
     const existingNotification = notifications.find(n => n.shootId === shootId && n.emailThread);
     if (existingNotification?.emailThread) {
       emailThread.push(...existingNotification.emailThread);
     }
-
-    // Add new email to thread
     emailThread.push(newEmail);
 
     addNotification({
@@ -469,20 +310,28 @@ The invoice has been received and is being processed.
       emailThread,
     });
 
-    // Send REAL email for new_request type
-    if (emailType === 'new_request' && additionalData) {
-      const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
-      sendRealEmail(
-        recipientEmail,
-        recipientName,
-        shootName,
-        additionalData.dates || 'TBD',
-        additionalData.itemCount || 0,
-        additionalData.estimatedBudget || 0,
-        shootId,
-        additionalData.requestorName || 'Pre-Production Team',
-        additionalData.equipmentList || []
-      );
+    // Send REAL email via SMTP backend
+    const template = templateMap[emailType];
+    if (template) {
+      try {
+        const response = await fetch(`${API_URL}/api/email/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: recipientEmail,
+            template,
+            shoot: shootData
+          })
+        });
+        
+        if (response.ok) {
+          console.log(`✉️ Real email sent: ${emailType} to ${recipientEmail}`);
+        } else {
+          console.error(`❌ Email failed: ${emailType}`, await response.text());
+        }
+      } catch (error) {
+        console.error(`❌ Email error: ${emailType}`, error);
+      }
     }
 
     // Show the Email Sent Modal
@@ -953,31 +802,20 @@ The invoice has been received and is being processed.
       console.error('API save failed, data saved locally:', error);
     }
     
-      // Trigger simulated email notification
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'quote_submitted', 
-        shoot.requestor.email || 'anish@company.com',
-        {
-          quoteAmount: amount,
-        }
-      );
+    // Send email notification via SMTP
+    const recipientEmail = shoot.approvalEmail || shoot.requestor.email || DEFAULT_RECIPIENTS.approver;
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'quote_submitted', 
+      recipientEmail,
+      {
+        quoteAmount: amount,
+        shoot: updatedShoot
+      }
+    );
       
-      // Send REAL email for quote submission (in same thread)
-      const recipientEmail = shoot.approvalEmail || shoot.requestor.email || 'anish@company.com';
-      const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
-      sendQuoteSubmittedEmail(
-        recipientEmail,
-        recipientName,
-        shoot.name,
-        shoot.date,
-        amount,
-        shootId,
-        shoot.equipment || []
-      );
-      
-      addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
+    addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
     
     // Only redirect to dashboard if not in standalone vendor mode
     const urlParams = new URLSearchParams(window.location.search);
@@ -1010,20 +848,21 @@ The invoice has been received and is being processed.
       console.error('API save failed:', error);
     }
     
-      // Trigger email that quote has been approved
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'approved', 
-        shoot.requestor.email || 'anish@company.com',
-        {
-          dates: shoot.date,
-          location: shoot.location,
-          quoteAmount: shoot.vendorQuote?.amount,
-        }
-      );
+    // Send approval email via SMTP to requestor
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'approved', 
+      shoot.requestor.email || DEFAULT_RECIPIENTS.admin,
+      {
+        dates: shoot.date,
+        location: shoot.location,
+        quoteAmount: shoot.vendorQuote?.amount,
+        shoot: updatedShoot
+      }
+    );
       
-      addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount.toLocaleString()}`);
+    addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount?.toLocaleString()}`);
   };
 
   const handleReject = async (shootId: string, reason: string) => {
@@ -1035,9 +874,9 @@ The invoice has been received and is being processed.
     
     const updatedShoot = { 
       ...shoot, 
-            status: 'with_vendor' as ShootStatus,
-            rejectionReason: reason,
-            vendorQuote: undefined
+      status: 'with_vendor' as ShootStatus,
+      rejectionReason: reason,
+      vendorQuote: undefined
     };
     
     // Update local state first for immediate UI feedback
@@ -1050,7 +889,10 @@ The invoice has been received and is being processed.
       console.error('API save failed:', error);
     }
     
-      addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
+    // Send rejection email via SMTP
+    emailQuoteRejected(updatedShoot, shoot.requestor.email);
+    
+    addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };
 
   const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
@@ -1071,15 +913,16 @@ The invoice has been received and is being processed.
     
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-      // Trigger email that invoice has been uploaded
-      triggerEmail(
-        shootId, 
-        shoot.name, 
-        'invoice_uploaded', 
-        'finance@company.com'
-      );
+    // Send invoice uploaded email via SMTP to finance
+    triggerEmail(
+      shootId, 
+      shoot.name, 
+      'invoice_uploaded', 
+      DEFAULT_RECIPIENTS.finance,
+      { shoot: updatedShoot }
+    );
       
-      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
+    addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
   };
 
   const handleMarkPaid = async (shootId: string) => {
@@ -1088,8 +931,8 @@ The invoice has been received and is being processed.
     
     const updatedShoot = { 
       ...shoot, 
-            status: 'completed' as ShootStatus,
-            paid: true
+      status: 'completed' as ShootStatus,
+      paid: true
     };
     
     // Save to API first
@@ -1097,7 +940,10 @@ The invoice has been received and is being processed.
     
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
-      addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
+    // Send payment complete email via SMTP
+    emailPaymentComplete(updatedShoot);
+    
+    addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
     
     setSelectedShootId(null);
   };
