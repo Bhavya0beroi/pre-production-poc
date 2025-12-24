@@ -82,6 +82,8 @@ const STORAGE_KEYS = {
   SHOOTS: 'shootflow_shoots_v2',
   CATALOG: 'shootflow_catalog_v2',
   NOTIFICATIONS: 'shootflow_notifications_v2',
+  VIEW_MODE: 'shootflow_viewMode',
+  SELECTED_SHOOT: 'shootflow_selectedShoot',
 };
 
 // Helper to safely parse JSON from localStorage
@@ -141,8 +143,29 @@ function AppContent() {
     return <LoginPage />;
   }
   
-  const [viewMode, setViewMode] = useState<ViewMode>(vendorShootId ? 'vendor' : 'dashboard');
-  const [selectedShootId, setSelectedShootId] = useState<string | null>(vendorShootId);
+  // Load viewMode from localStorage, default to dashboard
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (vendorShootId) return 'vendor';
+    const saved = localStorage.getItem(STORAGE_KEYS.VIEW_MODE);
+    return (saved as ViewMode) || 'dashboard';
+  });
+  const [selectedShootId, setSelectedShootId] = useState<string | null>(() => {
+    if (vendorShootId) return vendorShootId;
+    return localStorage.getItem(STORAGE_KEYS.SELECTED_SHOOT);
+  });
+  
+  // Save viewMode and selectedShoot to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.VIEW_MODE, viewMode);
+  }, [viewMode]);
+  
+  useEffect(() => {
+    if (selectedShootId) {
+      localStorage.setItem(STORAGE_KEYS.SELECTED_SHOOT, selectedShootId);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.SELECTED_SHOOT);
+    }
+  }, [selectedShootId]);
   
   // Notification system state - load from localStorage
   const [notifications, setNotifications] = useState<Notification[]>(() => 

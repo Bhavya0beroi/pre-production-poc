@@ -805,19 +805,23 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                         <div className="divide-y divide-gray-100">
                           {monthInvoices.map((invoice) => {
                             const isInvoiceExpanded = expandedInvoices.has(invoice.id);
-                            // Only show equipment if it has actual rate/price data
+                            // Check if has equipment with any data (rate, price, total, or just items)
                             const hasEquipment = invoice.equipment && invoice.equipment.length > 0 && 
-                              invoice.equipment.some((e: any) => (e.rate || e.price || e.dailyRate || e.vendorRate || e.rentalCost || e.cost) > 0);
+                              invoice.equipment.some((e: any) => 
+                                (e.rate || e.price || e.dailyRate || e.vendorRate || e.rentalCost || e.cost || e.total || e.totalCost || e.name || e.itemName) 
+                              );
+                            // Always make clickable if has equipment OR has invoice file
+                            const isClickable = hasEquipment || invoice.invoiceFile?.data;
                             
                             return (
                               <div key={invoice.id}>
                                 <div 
-                                  className={`px-5 py-3 flex items-center justify-between transition-colors ${hasEquipment ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                  onClick={() => hasEquipment && toggleInvoice(invoice.id)}
+                                  className={`px-5 py-3 flex items-center justify-between transition-colors ${isClickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                                  onClick={() => isClickable && toggleInvoice(invoice.id)}
                                 >
                                   <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${invoice.paid ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                                      {hasEquipment ? (
+                                      {isClickable ? (
                                         isInvoiceExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
                                       ) : (
                                         <FileText className="w-4 h-4" />
@@ -848,49 +852,80 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                   </div>
                                 </div>
                                 
-                                {/* Equipment Details */}
-                                {isInvoiceExpanded && hasEquipment && (
+                                {/* Expanded Details */}
+                                {isInvoiceExpanded && isClickable && (
                                   <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg">
-                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                                      Equipment Details ({invoice.equipment.length} items)
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full text-sm border-collapse min-w-full">
-                                        <thead>
-                                          <tr className="text-left text-gray-500 text-xs bg-gray-100">
-                                            <th className="py-2 px-3 font-medium border-b border-gray-200">Item</th>
-                                            <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Qty</th>
-                                            <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Rate</th>
-                                            <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Days</th>
-                                            <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Total</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {invoice.equipment.map((item: any, idx: number) => {
-                                            const qty = item.quantity || item.qty || 1;
-                                            const rate = item.dailyRate || item.vendorRate || item.rate || item.price || item.rentalCost || item.cost || 0;
-                                            const days = item.days || item.rentalDays || 1;
-                                            const total = item.total || item.totalCost || (qty * rate * days);
-                                            return (
-                                              <tr key={idx} className="border-b border-gray-200 hover:bg-gray-100">
-                                                <td className="py-2 px-3 text-gray-900">{item.name || item.itemName || '-'}</td>
-                                                <td className="py-2 px-3 text-center text-gray-600">{qty}</td>
-                                                <td className="py-2 px-3 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
-                                                <td className="py-2 px-3 text-center text-gray-600">{days}</td>
-                                                <td className="py-2 px-3 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
+                                    {/* Invoice PDF Preview */}
+                                    {invoice.invoiceFile?.data && (
+                                      <div className="mb-4">
+                                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                                          Invoice Document
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); openPdfViewer(invoice); }}
+                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                                          >
+                                            <FileText className="w-4 h-4" />
+                                            View Invoice PDF
+                                          </button>
+                                          <span className="text-sm text-gray-500">{invoice.invoiceFile.name}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Equipment Details */}
+                                    {hasEquipment && (
+                                      <>
+                                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                                          Equipment Details ({invoice.equipment.length} items)
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                          <table className="w-full text-sm border-collapse min-w-full">
+                                            <thead>
+                                              <tr className="text-left text-gray-500 text-xs bg-gray-100">
+                                                <th className="py-2 px-3 font-medium border-b border-gray-200">Item</th>
+                                                <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Qty</th>
+                                                <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Rate</th>
+                                                <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Days</th>
+                                                <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Total</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {invoice.equipment.map((item: any, idx: number) => {
+                                                const qty = item.quantity || item.qty || 1;
+                                                const rate = item.dailyRate || item.vendorRate || item.rate || item.price || item.rentalCost || item.cost || 0;
+                                                const days = item.days || item.rentalDays || 1;
+                                                const total = item.total || item.totalCost || (qty * rate * days);
+                                                return (
+                                                  <tr key={idx} className="border-b border-gray-200 hover:bg-gray-100">
+                                                    <td className="py-2 px-3 text-gray-900">{item.name || item.itemName || '-'}</td>
+                                                    <td className="py-2 px-3 text-center text-gray-600">{qty}</td>
+                                                    <td className="py-2 px-3 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
+                                                    <td className="py-2 px-3 text-center text-gray-600">{days}</td>
+                                                    <td className="py-2 px-3 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
                             </tr>
-                                            );
-                                          })}
+                                                );
+                                              })}
                         </tbody>
-                                        <tfoot>
-                                          <tr className="border-t-2 border-gray-400 bg-gray-200">
-                                            <td colSpan={4} className="py-2 px-3 font-semibold text-gray-900">Total</td>
-                                            <td className="py-2 px-3 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
-                                          </tr>
-                                        </tfoot>
+                                            <tfoot>
+                                              <tr className="border-t-2 border-gray-400 bg-gray-200">
+                                                <td colSpan={4} className="py-2 px-3 font-semibold text-gray-900">Total</td>
+                                                <td className="py-2 px-3 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
+                                              </tr>
+                                            </tfoot>
                       </table>
-                    </div>
-                  </div>
+                                        </div>
+                                      </>
+                                    )}
+                                    
+                                    {/* If no equipment but has PDF */}
+                                    {!hasEquipment && invoice.invoiceFile?.data && (
+                                      <div className="text-sm text-gray-500 mt-2">
+                                        Click "View Invoice PDF" above to see the full invoice details.
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             );

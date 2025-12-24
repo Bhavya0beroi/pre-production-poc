@@ -152,7 +152,8 @@ async function importPDFs() {
         console.log(`✅ Updated: ${shoot.name || shoot.title} <- ${filename}`);
         updated++;
       } else {
-        console.log(`❌ Failed to update: ${shoot.name || shoot.title}`);
+        const errorText = await updateResponse.text();
+        console.log(`❌ Failed to update: ${shoot.name || shoot.title} - Status: ${updateResponse.status} - ${errorText.substring(0, 100)}`);
         errors++;
       }
     } catch (err) {
