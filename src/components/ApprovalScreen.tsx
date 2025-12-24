@@ -59,9 +59,26 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
     setShowDetailsModal(true);
   };
 
-  const pendingCount = shoots.length;
-  const approvedCount = allShoots.filter(s => s.approved && s.status !== 'with_swati').length;
-  const rejectedCount = allShoots.filter(s => s.rejectionReason).length;
+  // Calculate counts with grouping
+  const getGroupedCount = (shootList: Shoot[]): number => {
+    const seenGroups = new Set<string>();
+    let count = 0;
+    shootList.forEach(shoot => {
+      if (shoot.requestGroupId) {
+        if (!seenGroups.has(shoot.requestGroupId)) {
+          seenGroups.add(shoot.requestGroupId);
+          count++;
+        }
+      } else {
+        count++;
+      }
+    });
+    return count;
+  };
+  
+  const pendingCount = getGroupedCount(shoots);
+  const approvedCount = getGroupedCount(allShoots.filter(s => s.approved && s.status !== 'with_swati'));
+  const rejectedCount = getGroupedCount(allShoots.filter(s => s.rejectionReason));
 
   // Month name mappings
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -123,7 +140,7 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
     });
   };
 
-  // Get filtered data based on tab
+  // Get filtered data based on tab - with grouping for multi-shoot requests
   const getFilteredData = () => {
     let filtered: Shoot[] = [];
 
@@ -149,7 +166,25 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
       });
     }
 
-    return filtered;
+    // Group multi-shoot requests - only show first shoot in each group
+    const seenGroups = new Set<string>();
+    const groupedFiltered = filtered.filter(shoot => {
+      if (shoot.requestGroupId) {
+        if (seenGroups.has(shoot.requestGroupId)) {
+          return false; // Skip other shoots in the same group
+        }
+        seenGroups.add(shoot.requestGroupId);
+      }
+      return true;
+    });
+
+    return groupedFiltered;
+  };
+  
+  // Get related shoots count for display
+  const getRelatedShootsCount = (shoot: Shoot): number => {
+    if (!shoot.requestGroupId) return 0;
+    return allShoots.filter(s => s.requestGroupId === shoot.requestGroupId && s.id !== shoot.id).length;
   };
 
   const filteredData = getFilteredData();
@@ -442,10 +477,19 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {monthData.map((shoot) => (
+                          {monthData.map((shoot) => {
+                            const relatedCount = getRelatedShootsCount(shoot);
+                            return (
                             <tr key={shoot.id} className="hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4">
-                                <div className="font-medium text-gray-900">{shoot.name}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-900">{shoot.name}</span>
+                                  {relatedCount > 0 && (
+                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                                      +{relatedCount} more
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="text-sm text-gray-500">{shoot.location}</div>
                               </td>
                               <td className="px-6 py-4 text-gray-600">{shoot.date}</td>
@@ -484,7 +528,8 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
                                 </button>
                               </td>
                             </tr>
-                          ))}
+                          );
+                          })}
                         </tbody>
                       </table>
                     </div>

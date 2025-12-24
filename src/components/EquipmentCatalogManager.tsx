@@ -51,8 +51,9 @@ export function EquipmentCatalogManager({
   const [formName, setFormName] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [formRate, setFormRate] = useState('');
+  const [customCategory, setCustomCategory] = useState(''); // For "Other" category
 
-  const categories = ['all', 'Camera', 'Lens', 'Light', 'Tripod', 'Audio', 'Small Equipments', 'Extra', 'Assistant', 'Gaffer', 'Transport'];
+  const categories = ['all', 'Camera', 'Lens', 'Light', 'Tripod', 'Audio', 'Small Equipments', 'Extra', 'Assistant', 'Gaffer', 'Transport', 'Other'];
 
   const openEditDrawer = (item: CatalogItem) => {
     setEditingItem(item);
@@ -83,16 +84,20 @@ export function EquipmentCatalogManager({
   };
 
   const handleAddItem = () => {
-    if (formName && formCategory && formRate) {
+    // Use custom category if "Other" is selected
+    const finalCategory = formCategory === 'Other' ? customCategory : formCategory;
+    
+    if (formName && finalCategory && formRate) {
       const newItem: CatalogItem = {
         id: Date.now().toString(),
         name: formName,
-        category: formCategory,
+        category: finalCategory,
         dailyRate: parseInt(formRate),
         lastUpdated: 'Today'
       };
       onUpdateCatalog([...catalogItems, newItem]);
       setShowAddDialog(false);
+      setCustomCategory(''); // Reset custom category
     }
   };
 
@@ -451,7 +456,10 @@ export function EquipmentCatalogManager({
                 <label className="block mb-2 text-sm font-medium text-gray-700">Category</label>
                 <select
                   value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
+                  onChange={(e) => {
+                    setFormCategory(e.target.value);
+                    if (e.target.value !== 'Other') setCustomCategory('');
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option>Camera</option>
@@ -464,8 +472,23 @@ export function EquipmentCatalogManager({
                   <option>Assistant</option>
                   <option>Gaffer</option>
                   <option>Transport</option>
+                  <option>Other</option>
                 </select>
               </div>
+
+              {/* Custom category input when "Other" is selected */}
+              {formCategory === 'Other' && (
+                <div>
+                  <label className="block mb-2 text-sm font-medium text-gray-700">Custom Category Name</label>
+                  <input
+                    type="text"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    placeholder="Enter your category name"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block mb-2 text-sm font-medium text-gray-700">Daily Rate (₹)</label>
@@ -488,7 +511,7 @@ export function EquipmentCatalogManager({
               </button>
               <button
                 onClick={handleAddItem}
-                disabled={!formName || !formRate}
+                disabled={!formName || !formRate || (formCategory === 'Other' && !customCategory)}
                 className="flex-1 px-5 py-2.5 rounded-lg text-white disabled:opacity-50 font-medium transition-colors hover:opacity-90"
                 style={{ backgroundColor: '#2D60FF' }}
               >

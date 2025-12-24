@@ -19,9 +19,10 @@ interface CreateRequestFormProps {
   onClose: () => void;
   onSubmit: (requestData: any) => void;
   catalogItems: CatalogItem[];
+  onAddCatalogItem?: (item: CatalogItem) => void;
 }
 
-export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateRequestFormProps) {
+export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalogItem }: CreateRequestFormProps) {
   // Get current date in India timezone (IST)
   const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const currentDay = today.getDate();
@@ -31,6 +32,16 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
   // Shared fields
   const [requestorName, setRequestorName] = useState('');
   const [approvalEmail, setApprovalEmail] = useState('');
+  
+  // Add New Equipment Modal state
+  const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
+  const [newEquipment, setNewEquipment] = useState({
+    name: '',
+    category: 'Camera',
+    dailyRate: 0,
+    customCategory: ''
+  });
+  const equipmentCategories = ['Camera', 'Lens', 'Light', 'Tripod', 'Audio', 'Small Equipments', 'Extra', 'Assistant', 'Gaffer', 'Transport', 'Other'];
   
   // Multi-shoot support
   const [shoots, setShoots] = useState<ShootData[]>([
@@ -209,6 +220,37 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
   const getCartQuantity = (itemId: string) => {
     const item = activeShoot.cart.find(c => c.id === itemId);
     return item ? item.quantity : 0;
+  };
+  
+  // Handle adding new equipment to catalog and cart
+  const handleAddNewEquipment = () => {
+    if (!newEquipment.name.trim() || newEquipment.dailyRate <= 0) {
+      return;
+    }
+    
+    const finalCategory = newEquipment.category === 'Other' && newEquipment.customCategory.trim() 
+      ? newEquipment.customCategory.trim() 
+      : newEquipment.category;
+    
+    const newItem: CatalogItem = {
+      id: `new-${Date.now()}`,
+      name: newEquipment.name.trim(),
+      category: finalCategory,
+      dailyRate: newEquipment.dailyRate,
+      available: true
+    };
+    
+    // Add to catalog via callback
+    if (onAddCatalogItem) {
+      onAddCatalogItem(newItem);
+    }
+    
+    // Add to current shoot's cart
+    updateActiveShoot('cart', [...activeShoot.cart, { ...newItem, quantity: 1 }]);
+    
+    // Reset form and close modal
+    setNewEquipment({ name: '', category: 'Camera', dailyRate: 0, customCategory: '' });
+    setShowAddEquipmentModal(false);
   };
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -886,6 +928,16 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
                   className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              
+              {/* Add New Equipment Button */}
+              <button
+                type="button"
+                onClick={() => setShowAddEquipmentModal(true)}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors border border-dashed border-gray-300"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm font-medium">Add New Equipment</span>
+              </button>
             </div>
             
             {/* Equipment Categories Accordion - Scrollable */}
@@ -1078,6 +1130,103 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems }: CreateReq
           </button>
         </div>
       </div>
+      
+      {/* Add New Equipment Modal */}
+      {showAddEquipmentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Equipment</h3>
+              <button 
+                onClick={() => {
+                  setShowAddEquipmentModal(false);
+                  setNewEquipment({ name: '', category: 'Camera', dailyRate: 0, customCategory: '' });
+                }}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Equipment Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Name *</label>
+                <input
+                  type="text"
+                  value={newEquipment.name}
+                  onChange={(e) => setNewEquipment(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Sony A7S III"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                <select
+                  value={newEquipment.category}
+                  onChange={(e) => setNewEquipment(prev => ({ ...prev, category: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {equipmentCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                
+                {/* Custom Category Input */}
+                {newEquipment.category === 'Other' && (
+                  <input
+                    type="text"
+                    value={newEquipment.customCategory}
+                    onChange={(e) => setNewEquipment(prev => ({ ...prev, customCategory: e.target.value }))}
+                    placeholder="Enter custom category name"
+                    className="w-full px-4 py-3 mt-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
+              </div>
+              
+              {/* Daily Rate */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Daily Rate (₹) *</label>
+                <input
+                  type="number"
+                  value={newEquipment.dailyRate || ''}
+                  onChange={(e) => setNewEquipment(prev => ({ ...prev, dailyRate: Number(e.target.value) }))}
+                  placeholder="e.g. 1500"
+                  min="0"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddEquipmentModal(false);
+                  setNewEquipment({ name: '', category: 'Camera', dailyRate: 0, customCategory: '' });
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewEquipment}
+                disabled={!newEquipment.name.trim() || newEquipment.dailyRate <= 0 || (newEquipment.category === 'Other' && !newEquipment.customCategory.trim())}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add to Cart & Catalog
+              </button>
+            </div>
+            
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              This equipment will be added to the catalog for future use
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

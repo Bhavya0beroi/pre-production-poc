@@ -112,9 +112,12 @@ const emailTemplates = {
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${appUrl}" 
-                 style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+                 style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
                 Review & Send to Vendor →
               </a>
+              <br><br>
+              <span style="color: #666; font-size: 13px;">Or copy this link: </span>
+              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${appUrl}</code>
             </div>
             
             <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
@@ -137,10 +140,12 @@ const emailTemplates = {
     const allEquipment = [...(shoot1.equipment || []), ...(shoot2.equipment || [])];
     const totalItems = allEquipment.length;
     const estimatedBudget = calculateBudget(allEquipment);
+    const requestedBy = shoot1.requestor?.name || data.requestorName || 'Pre-Production Team';
+    const shootDates = shoot1.date || shoot1.dates || 'TBD';
     const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
     
     return {
-      subject: `🔔 ACTION REQUIRED: New Equipment Request - ${shoot1.name || 'Shoot 1'} & ${shoot2.name || 'Shoot 2'}`,
+      subject: `🔔 ACTION REQUIRED: New Equipment Request - ${data.shoots?.length || 2} Shoots Request`,
       html: `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
           <div style="padding: 30px;">
@@ -149,44 +154,25 @@ const emailTemplates = {
             
             <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #667eea;">
               <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📋 SHOOT DETAILS</h3>
-              
-              <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
-                <h4 style="color: #667eea; margin: 0 0 10px 0;">Shoot 1</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">${shoot1.name || 'TBD'}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Dates:</td><td style="padding: 6px 0; color: #333;">${shoot1.date || shoot1.dates || 'TBD'}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Requested By:</td><td style="padding: 6px 0; color: #333;">${shoot1.requestor?.name || 'Pre-Production Team'}</td></tr>
-                </table>
-              </div>
-              
-              <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
-                <h4 style="color: #667eea; margin: 0 0 10px 0;">Shoot 2</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">${shoot2.name || 'TBD'}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Dates:</td><td style="padding: 6px 0; color: #333;">${shoot2.date || shoot2.dates || 'TBD'}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Requested By:</td><td style="padding: 6px 0; color: #333;">${shoot2.requestor?.name || 'Pre-Production Team'}</td></tr>
-                </table>
-              </div>
-              
-              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                <h4 style="color: #333; margin: 0 0 10px 0;">Summary</h4>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Total Items:</td><td style="padding: 6px 0; color: #333;">${totalItems}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Estimated Budget:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">₹${estimatedBudget.toLocaleString()}</td></tr>
-                </table>
-              </div>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                <tr><td style="padding: 8px 0; color: #666; width: 160px;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${data.shoots?.length || 2} Shoots Request</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Dates:</td><td style="padding: 8px 0; color: #333;">${shootDates}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Requested By:</td><td style="padding: 8px 0; color: #333; text-transform: uppercase;">${requestedBy}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Total Items:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${totalItems}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Estimated Budget:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">₹${estimatedBudget.toLocaleString()}</td></tr>
+              </table>
             </div>
             
             <div style="margin: 25px 0;">
               <h3 style="color: #333; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📦 EQUIPMENT LIST</h3>
               
               ${shoot1.equipment && shoot1.equipment.length > 0 ? `
-                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 1 Equipment</h4>
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 1 (${shoot1.name || 'Shoot 1'}) Equipment</h4>
                 ${formatEquipmentList(shoot1.equipment)}
               ` : ''}
               
               ${shoot2.equipment && shoot2.equipment.length > 0 ? `
-                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 2 Equipment</h4>
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 2 (${shoot2.name || 'Shoot 2'}) Equipment</h4>
                 ${formatEquipmentList(shoot2.equipment)}
               ` : ''}
             </div>
@@ -198,9 +184,12 @@ const emailTemplates = {
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${appUrl}" 
-                 style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+                 style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
                 Review & Send to Vendor →
               </a>
+              <br><br>
+              <span style="color: #666; font-size: 13px;">Or copy this link: </span>
+              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${appUrl}</code>
             </div>
             
             <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
@@ -215,99 +204,138 @@ const emailTemplates = {
     };
   },
 
-  // 2. Vendor submits quote - notify approver
-  quoteSubmitted: (shoot) => ({
-    subject: `💰 Quote Received: ${shoot.name} - ₹${(shoot.vendorQuote?.amount || 0).toLocaleString()}`,
-    html: `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
-          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Quote Pending Approval</p>
+  // 2. Vendor submits quote - notify approver (Gopala Media quote)
+  quoteSubmitted: (shoot) => {
+    const recipientName = shoot.recipientName || 'Team';
+    const equipment = shoot.equipment || [];
+    const vendorTotal = shoot.vendorQuote?.amount || 0;
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    // Format equipment list for quote email
+    const formatQuoteEquipment = (equipment) => {
+      if (!equipment || equipment.length === 0) return '<p style="color: #666;">No equipment listed</p>';
+      
+      return equipment.map(eq => {
+        const price = eq.vendorRate || eq.dailyRate || eq.rate || 0;
+        const qty = eq.quantity || eq.qty || 1;
+        const total = price * qty;
+        return `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;">
+          <span style="color: #333;">${eq.name || eq.itemName || '-'}</span>
+          <span style="color: #333; font-weight: 600;">₹${total.toLocaleString()}</span>
+        </div>`;
+      }).join('');
+    };
+    
+    return {
+      subject: `✅ Quote Received: ${shoot.name} - ₹${vendorTotal.toLocaleString()}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">Gopala Media has submitted the final quote for the shoot.</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #28a745;">
+              <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">💰 QUOTE SUMMARY</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px 0; color: #666; width: 140px;">Shoot:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Dates:</td><td style="padding: 8px 0; color: #333;">${shoot.date || shoot.dates || 'TBD'}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Vendor Total:</td><td style="padding: 8px 0; color: #28a745; font-weight: 700; font-size: 18px;">₹${vendorTotal.toLocaleString()}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Status:</td><td style="padding: 8px 0;"><span style="background: #d4edda; color: #155724; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Quote Received</span></td></tr>
+              </table>
+            </div>
+            
+            <div style="margin: 25px 0;">
+              <h3 style="color: #333; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📦 EQUIPMENT LIST</h3>
+              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                ${formatQuoteEquipment(equipment)}
+              </div>
+            </div>
+            
+            <div style="background: #fff3cd; padding: 15px 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107;">
+              <p style="color: #856404; margin: 0;">Please review the pricing. If everything looks correct, you can forward this to Swati for final financial approval.</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #28a745; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
+                Review & Send for Approval →
+              </a>
+              <button 
+                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
+                Copy Link
+              </button>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
+          </div>
         </div>
-        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <h2 style="color: #333; margin-top: 0;">Quote Received!</h2>
-          <p style="color: #666; line-height: 1.6;">A vendor quote has been submitted and requires your approval.</p>
-          
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-            <p style="color: rgba(255,255,255,0.8); margin: 0; font-size: 14px;">QUOTED AMOUNT</p>
-            <p style="color: white; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.vendorQuote?.amount || 0).toLocaleString()}</p>
-          </div>
-          
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #333; margin-top: 0;">📋 Shoot Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
-            </table>
-          </div>
-          
-          ${shoot.vendorQuote?.notes ? `
-          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
-            <p style="margin: 0; color: #856404;"><strong>Vendor Notes:</strong> ${shoot.vendorQuote.notes}</p>
-          </div>
-          ` : ''}
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}" 
-               style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
-              ✓ Review & Approve
-            </a>
-          </div>
-          
-          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            This is an automated message from ShootFlow.
-          </p>
-        </div>
-      </div>
-    `
-  }),
+      `
+    };
+  },
 
   // 3. Quote approved - notify requestor & vendor
-  quoteApproved: (shoot) => ({
-    subject: `✅ Approved: ${shoot.name} - ₹${(shoot.approvedAmount || 0).toLocaleString()}`,
-    html: `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
-          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Quote Approved! 🎉</p>
-        </div>
-        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <div style="width: 80px; height: 80px; background: #d4edda; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-              <span style="font-size: 40px;">✓</span>
+  quoteApproved: (shoot) => {
+    const recipientName = shoot.recipientName || 'Team';
+    const approvedAmount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
+    const approvedBy = shoot.approvedBy || 'Swati';
+    const vendorName = shoot.vendorName || 'Gopala Media';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    return {
+      subject: `✅ Budget Approved: ${shoot.name} - Ready for Shoot`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">Good news! The budget for <strong>${shoot.name}</strong> has been approved by <strong>${approvedBy}</strong>.</p>
+            
+            <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #28a745;">
+              <h3 style="color: #155724; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">🚀 NEXT STEPS</h3>
+              <ul style="color: #155724; margin: 10px 0 0 0; padding-left: 20px; line-height: 1.8;">
+                <li>The Purchase Order (PO) has been generated automatically.</li>
+                <li>Please confirm the booking with <strong>${vendorName}</strong>.</li>
+              </ul>
             </div>
-            <h2 style="color: #28a745; margin: 0;">Quote Approved!</h2>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #28a745;">
+              <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📋 SHOOT SUMMARY</h3>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <tr><td style="padding: 8px 0; color: #666; width: 140px;">Vendor:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${vendorName}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Approved Amount:</td><td style="padding: 8px 0; color: #28a745; font-weight: 700; font-size: 18px;">₹${approvedAmount.toLocaleString()}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Approved By:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${approvedBy}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Status:</td><td style="padding: 8px 0;"><span style="background: #d4edda; color: #155724; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">Ready for Shoot</span></td></tr>
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #28a745; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
+                👉 View Final Shoot Details
+              </a>
+              <button 
+                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
+                Copy Link
+              </button>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
           </div>
-          
-          <p style="color: #666; line-height: 1.6; text-align: center;">The equipment request has been approved and is ready for the shoot.</p>
-          
-          <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-            <p style="color: #155724; margin: 0; font-size: 14px;">APPROVED AMOUNT</p>
-            <p style="color: #28a745; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || 0).toLocaleString()}</p>
-          </div>
-          
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #333; margin-top: 0;">📋 Shoot Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
-            </table>
-          </div>
-          
-          <h4 style="color: #333;">🎥 Approved Equipment:</h4>
-          <ul style="color: #666; line-height: 1.8;">
-            ${(shoot.equipment || []).map(eq => `<li>${eq.name} ${eq.quantity ? `(Qty: ${eq.quantity})` : ''}</li>`).join('')}
-          </ul>
-          
-          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            This is an automated message from ShootFlow.
-          </p>
         </div>
-      </div>
-    `
-  }),
+      `
+    };
+  },
 
   // 4. Quote rejected - notify requestor
   quoteRejected: (shoot) => ({
@@ -347,47 +375,110 @@ const emailTemplates = {
     `
   }),
 
-  // 5. Invoice uploaded - notify finance
-  invoiceUploaded: (shoot) => ({
-    subject: `📄 Invoice Uploaded: ${shoot.name}`,
-    html: `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
-          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Invoice Ready for Payment</p>
+  // 5. Invoice reminder - 7 days after shoot completed
+  invoiceReminder: (shoot) => {
+    const recipientName = shoot.recipientName || 'Team';
+    const vendorName = shoot.vendorName || 'Gopala Media';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    return {
+      subject: `⚠️ Invoice Pending: ${shoot.name} - Action Required`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">The shoot <strong>${shoot.name}</strong> was completed <strong>7 days ago</strong>.</p>
+            
+            <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107;">
+              <h3 style="color: #856404; margin-top: 0; font-size: 14px;">⚠️ ACTION REQUIRED</h3>
+              <p style="color: #856404; margin: 10px 0 0 0; line-height: 1.6;">
+                We have not yet received the final invoice in the system.
+              </p>
+              <p style="color: #856404; margin: 10px 0 0 0; line-height: 1.6;">
+                Please collect the final bill from <strong>${vendorName}</strong> and upload it to the dashboard to ensure timely payment processing.
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #ffc107; color: #212529; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
+                👉 Click here to Upload Invoice
+              </a>
+              <button 
+                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
+                Copy Link
+              </button>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 15px 20px; border-radius: 8px; margin: 25px 0;">
+              <p style="color: #666; margin: 0; font-size: 14px;">
+                💡 If the shoot dates were extended, please update the timeline in the <strong>Active Shoots</strong> panel.
+              </p>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
+          </div>
         </div>
-        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <h2 style="color: #333; margin-top: 0;">📄 Invoice Uploaded</h2>
-          <p style="color: #666; line-height: 1.6;">An invoice has been uploaded for the following shoot and is ready for payment processing.</p>
-          
-          <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-            <p style="color: #0056b3; margin: 0; font-size: 14px;">PAYMENT AMOUNT</p>
-            <p style="color: #004085; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || shoot.vendorQuote?.amount || 0).toLocaleString()}</p>
+      `
+    };
+  },
+
+  // 6. Invoice uploaded - notify finance
+  invoiceUploaded: (shoot) => {
+    const recipientName = shoot.recipientName || 'Team';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    return {
+      subject: `📄 Invoice Uploaded: ${shoot.name}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">An invoice has been uploaded for the following shoot and is ready for payment processing.</p>
+            
+            <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #007bff; text-align: center;">
+              <p style="color: #0056b3; margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">PAYMENT AMOUNT</p>
+              <p style="color: #004085; margin: 10px 0 0 0; font-size: 36px; font-weight: 700;">₹${(shoot.approvedAmount || shoot.vendorQuote?.amount || 0).toLocaleString()}</p>
+            </div>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #6c757d;">
+              <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📋 DETAILS</h3>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <tr><td style="padding: 8px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Invoice File:</td><td style="padding: 8px 0; color: #333;">${shoot.invoiceFile?.name || 'Uploaded'}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Shoot Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #007bff; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
+                View in ShootFlow →
+              </a>
+              <button 
+                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
+                Copy Link
+              </button>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
           </div>
-          
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #333; margin-top: 0;">📋 Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Invoice File:</td><td style="padding: 8px 0; color: #333;">${shoot.invoiceFile?.name || 'Uploaded'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Shoot Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
-            </table>
-          </div>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}" 
-               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
-              View in ShootFlow →
-            </a>
-          </div>
-          
-          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            This is an automated message from ShootFlow.
-          </p>
         </div>
-      </div>
-    `
-  }),
+      `
+    };
+  },
 
   // 6. Payment completed - notify vendor
   paymentComplete: (shoot) => ({
@@ -434,7 +525,8 @@ const emailTemplates = {
 };
 
 // Send email function
-async function sendEmail(to, template, shoot) {
+// Send email function with threading support
+async function sendEmail(to, template, shoot, threadMessageId = null) {
   try {
     const emailContent = emailTemplates[template](shoot);
     
@@ -448,8 +540,19 @@ async function sendEmail(to, template, shoot) {
       html: emailContent.html
     };
     
+    // Add threading headers if this is a reply in a thread
+    if (threadMessageId) {
+      mailOptions.inReplyTo = threadMessageId;
+      mailOptions.references = [threadMessageId];
+      // Keep same subject line for threading (Gmail uses subject + references)
+      if (!mailOptions.subject.startsWith('Re:')) {
+        // Don't add Re: since we want clean subjects, threading works via headers
+      }
+      console.log(`📧 Threading email to message: ${threadMessageId}`);
+    }
+    
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✉️ Email sent: ${template} to ${to} - ${info.messageId}`);
+    console.log(`✉️ Email sent: ${template} to ${to} - ${info.messageId}${threadMessageId ? ' (threaded)' : ''}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`❌ Email failed: ${template} to ${to}`, error.message);
@@ -674,7 +777,7 @@ app.post('/api/catalog/bulk', async (req, res) => {
 // Send email endpoint
 app.post('/api/email/send', async (req, res) => {
   try {
-    const { to, template, shoot } = req.body;
+    const { to, template, shoot, threadMessageId } = req.body;
     
     if (!to || !template || !shoot) {
       return res.status(400).json({ error: 'Missing required fields: to, template, shoot' });
@@ -684,9 +787,11 @@ app.post('/api/email/send', async (req, res) => {
       return res.status(400).json({ error: `Invalid template: ${template}. Valid templates: ${Object.keys(emailTemplates).join(', ')}` });
     }
     
-    const result = await sendEmail(to, template, shoot);
+    // Pass threadMessageId for email threading (optional)
+    const result = await sendEmail(to, template, shoot, threadMessageId || null);
     
     if (result.success) {
+      // Return messageId so frontend can store it for threading
       res.json({ success: true, messageId: result.messageId });
     } else {
       res.status(500).json({ success: false, error: result.error });

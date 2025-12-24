@@ -103,3 +103,7 @@ INSERT INTO catalog_items (id, name, daily_rate, category, last_updated) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 
+
+
+
+

@@ -22,8 +22,9 @@ import {
   DEFAULT_RECIPIENTS 
 } from './services/emailService';
 
-// API URL for Railway backend
-const API_URL = 'https://divine-nature-production-c49a.up.railway.app';
+// API URL - switch between local and production
+const API_URL = 'http://localhost:3001'; // LOCAL TESTING
+// const API_URL = 'https://divine-nature-production-c49a.up.railway.app'; // PRODUCTION
 
 export type ShootStatus = 
   | 'new_request' 
@@ -237,8 +238,8 @@ function AppContent() {
 
   // Trigger email via SMTP (real email) and add to UI notification thread
   const triggerEmail = async (
-    shootId: string, 
-    shootName: string, 
+    shootId: string,
+    shootName: string,
     emailType: 'new_request' | 'new_request_multi' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'invoice_reminder' | 'invoice_uploaded',
     recipientEmail: string,
     additionalData?: {
@@ -270,11 +271,12 @@ function AppContent() {
       sent_to_vendor: 'newRequest',
       quote_submitted: 'quoteSubmitted',
       approved: 'quoteApproved',
+      invoice_reminder: 'invoiceReminder',
       invoice_uploaded: 'invoiceUploaded',
     };
 
     // Get recipient name from email
-    const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
+          const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
 
     // Get shoot data for email template
     const shootData = additionalData?.shoot || shoots.find(s => s.id === shootId) || {
@@ -323,22 +325,70 @@ function AppContent() {
       emailThread,
     });
 
-    // Send REAL email via SMTP backend
+    // Send REAL email via SMTP backend with threading support
     const template = templateMap[emailType];
     if (template) {
       try {
+        // Get existing thread message ID from shoot or request group for threading
+        const existingShoot = shoots.find(s => s.id === shootId);
+        let threadMessageId = existingShoot?.emailThreadId || null;
+        
+        // If no threadMessageId on this shoot, check other shoots in same request group
+        if (!threadMessageId && existingShoot?.requestGroupId) {
+          const groupShoot = shoots.find(s => 
+            s.requestGroupId === existingShoot.requestGroupId && s.emailThreadId
+          );
+          threadMessageId = groupShoot?.emailThreadId || null;
+          console.log(`📧 Found thread ID from request group: ${threadMessageId}`);
+        }
+        
         const response = await fetch(`${API_URL}/api/email/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: recipientEmail,
             template,
-            shoot: shootData
+            shoot: shootData,
+            threadMessageId // Pass existing thread ID for email threading
           })
         });
         
         if (response.ok) {
-          console.log(`✉️ Real email sent: ${emailType} to ${recipientEmail}`);
+          const result = await response.json();
+          console.log(`✉️ Real email sent: ${emailType} to ${recipientEmail} - messageId: ${result.messageId}${threadMessageId ? ' (threaded)' : ''}`);
+          
+          // If this is the first email (new_request), store the messageId for threading
+          // Also store it for ALL shoots in the request group
+          if ((emailType === 'new_request' || emailType === 'new_request_multi') && result.messageId && !threadMessageId) {
+            // Update the shoot with the email thread ID for future emails
+            const shootToUpdate = shoots.find(s => s.id === shootId);
+            if (shootToUpdate) {
+              const requestGroupId = shootToUpdate.requestGroupId;
+              
+              // Update this shoot
+              const updatedShoot = { ...shootToUpdate, emailThreadId: result.messageId };
+              await saveShootToAPI(updatedShoot);
+              
+              // Also update all related shoots in the same request group
+              if (requestGroupId) {
+                const relatedShoots = shoots.filter(s => s.requestGroupId === requestGroupId && s.id !== shootId);
+                for (const related of relatedShoots) {
+                  const updatedRelated = { ...related, emailThreadId: result.messageId };
+                  await saveShootToAPI(updatedRelated);
+                }
+                // Update state for all shoots at once
+                setShoots(prev => prev.map(s => 
+                  s.requestGroupId === requestGroupId 
+                    ? { ...s, emailThreadId: result.messageId }
+                    : s
+                ));
+                console.log(`📧 Stored email thread ID for request group ${requestGroupId}: ${result.messageId}`);
+              } else {
+                setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+                console.log(`📧 Stored email thread ID for shoot ${shootId}: ${result.messageId}`);
+              }
+            }
+          }
         } else {
           console.error(`❌ Email failed: ${emailType}`, await response.text());
         }
@@ -582,17 +632,22 @@ function AppContent() {
         });
         if (catalogResponse.ok) {
           const catalogData = await catalogResponse.json();
-          if (catalogData && catalogData.length > 0) {
-            const formattedCatalog: CatalogItem[] = catalogData.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              dailyRate: parseFloat(c.daily_rate),
-              category: c.category,
-              lastUpdated: c.last_updated,
-            }));
-            setCatalogItems(formattedCatalog);
-            console.log('Loaded', formattedCatalog.length, 'catalog items from API');
-          }
+          const apiCatalog: CatalogItem[] = (catalogData || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            dailyRate: parseFloat(c.daily_rate),
+            category: c.category,
+            lastUpdated: c.last_updated,
+          }));
+          
+          // Merge API data with defaults - API items take precedence, but keep defaults if not in API
+          const apiIds = new Set(apiCatalog.map(c => c.id));
+          const mergedCatalog = [
+            ...apiCatalog,
+            ...defaultCatalogItems.filter(d => !apiIds.has(d.id))
+          ];
+          setCatalogItems(mergedCatalog);
+          console.log('Loaded', apiCatalog.length, 'catalog items from API, merged with', defaultCatalogItems.length, 'defaults, total:', mergedCatalog.length);
         }
       } catch (error) {
         console.log('API not available, using localStorage data');
@@ -671,6 +726,42 @@ function AppContent() {
     } catch (error) {
       console.error('API save error:', error);
       throw error; // Re-throw so callers can handle it
+    }
+  };
+
+  // Helper function to save a single catalog item to API
+  const saveCatalogItemToAPI = async (item: CatalogItem) => {
+    if (!API_URL) return;
+    
+    const dbItem = {
+      id: item.id,
+      name: item.name,
+      daily_rate: item.dailyRate,
+      category: item.category,
+      last_updated: new Date().toISOString(),
+    };
+
+    try {
+      console.log('Saving catalog item to API:', dbItem.name);
+      const response = await fetch(`${API_URL}/api/catalog`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbItem),
+        signal: AbortSignal.timeout(5000),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Catalog item saved successfully:', result.name);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error('Catalog save failed:', response.status, errorText);
+        throw new Error(`API error: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Catalog save error:', error);
+      throw error;
     }
   };
 
@@ -782,6 +873,10 @@ function AppContent() {
     }
   };
 
+  // Track pending quote submissions for batch email
+  const pendingQuoteSubmissions = React.useRef<{ shootId: string; shoot: Shoot; amount: number }[]>([]);
+  const quoteSubmissionTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   const handleVendorSubmit = async (shootId: string, amount: number, notes: string, itemizedPrices?: { id: string; vendorRate: number }[]) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) {
@@ -815,20 +910,81 @@ function AppContent() {
       console.error('API save failed, data saved locally:', error);
     }
     
-    // Send email notification via SMTP
-    const recipientEmail = shoot.approvalEmail || shoot.requestor.email || DEFAULT_RECIPIENTS.approver;
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'quote_submitted', 
-      recipientEmail,
-      {
-        quoteAmount: amount,
-        shoot: updatedShoot
-      }
-    );
+    // Add to pending submissions (for batch email)
+    pendingQuoteSubmissions.current.push({ shootId, shoot: updatedShoot, amount });
+    
+    // Clear any existing timer and set a new one
+    // This ensures we wait for all shoots to be submitted before sending ONE email
+    if (quoteSubmissionTimer.current) {
+      clearTimeout(quoteSubmissionTimer.current);
+    }
+    
+    quoteSubmissionTimer.current = setTimeout(async () => {
+      const submissions = [...pendingQuoteSubmissions.current];
+      pendingQuoteSubmissions.current = []; // Clear pending
       
-    addActivityToShoot(shootId, 'Quote Submitted', `Vendor submitted quote: ₹${amount.toLocaleString()}`);
+      if (submissions.length === 0) return;
+      
+      const firstSubmission = submissions[0];
+      const recipientEmail = firstSubmission.shoot.approvalEmail || firstSubmission.shoot.requestor.email || DEFAULT_RECIPIENTS.approver;
+      
+      // Find emailThreadId from any shoot in the request group
+      const requestGroupId = firstSubmission.shoot.requestGroupId;
+      let threadMessageId: string | null = null;
+      if (requestGroupId) {
+        const groupShoot = shoots.find(s => s.requestGroupId === requestGroupId && s.emailThreadId);
+        threadMessageId = groupShoot?.emailThreadId || null;
+      } else {
+        threadMessageId = firstSubmission.shoot.emailThreadId || null;
+      }
+      
+      // Calculate combined total
+      const totalQuoteAmount = submissions.reduce((sum, s) => sum + s.amount, 0);
+      
+      // Send ONE email for all quote submissions
+      if (submissions.length === 1) {
+        // Single shoot - use regular quoteSubmitted template
+        triggerEmail(
+          firstSubmission.shootId, 
+          firstSubmission.shoot.name, 
+          'quote_submitted', 
+          recipientEmail,
+          {
+            quoteAmount: firstSubmission.amount,
+            shoot: firstSubmission.shoot
+          }
+        );
+      } else {
+        // Multi-shoot - create combined email data
+        const combinedShootData = {
+          ...firstSubmission.shoot,
+          name: `${submissions.length} Shoots Quote`,
+          vendorQuote: { amount: totalQuoteAmount, notes: '' },
+          shoots: submissions.map(s => ({
+            name: s.shoot.name,
+            date: s.shoot.date,
+            equipment: s.shoot.equipment,
+            vendorQuote: s.shoot.vendorQuote
+          }))
+        };
+        
+        triggerEmail(
+          firstSubmission.shootId, 
+          `${submissions.length} Shoots Quote`,
+          'quote_submitted', 
+          recipientEmail,
+          {
+            quoteAmount: totalQuoteAmount,
+            shoot: combinedShootData
+          }
+        );
+      }
+      
+      // Add activity to each shoot
+      submissions.forEach(s => {
+        addActivityToShoot(s.shootId, 'Quote Submitted', `Vendor submitted quote: ₹${s.amount.toLocaleString()}`);
+      });
+    }, 500); // Wait 500ms for all submissions to come in
     
     // Only redirect to dashboard if not in standalone vendor mode
     const urlParams = new URLSearchParams(window.location.search);
@@ -862,18 +1018,18 @@ function AppContent() {
     }
     
     // Send approval email via SMTP to requestor
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'approved', 
+      triggerEmail(
+        shootId, 
+        shoot.name, 
+        'approved', 
       shoot.requestor.email || DEFAULT_RECIPIENTS.admin,
-      {
-        dates: shoot.date,
-        location: shoot.location,
-        quoteAmount: shoot.vendorQuote?.amount,
+        {
+          dates: shoot.date,
+          location: shoot.location,
+          quoteAmount: shoot.vendorQuote?.amount,
         shoot: updatedShoot
-      }
-    );
+        }
+      );
       
     addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount?.toLocaleString()}`);
   };
@@ -887,9 +1043,9 @@ function AppContent() {
     
     const updatedShoot = { 
       ...shoot, 
-      status: 'with_vendor' as ShootStatus,
-      rejectionReason: reason,
-      vendorQuote: undefined
+            status: 'with_vendor' as ShootStatus,
+            rejectionReason: reason,
+            vendorQuote: undefined
     };
     
     // Update local state first for immediate UI feedback
@@ -905,7 +1061,7 @@ function AppContent() {
     // Send rejection email via SMTP
     emailQuoteRejected(updatedShoot, shoot.requestor.email);
     
-    addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
+      addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
   };
 
   const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
@@ -927,15 +1083,15 @@ function AppContent() {
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     // Send invoice uploaded email via SMTP to finance
-    triggerEmail(
-      shootId, 
-      shoot.name, 
-      'invoice_uploaded', 
+      triggerEmail(
+        shootId, 
+        shoot.name, 
+        'invoice_uploaded', 
       DEFAULT_RECIPIENTS.finance,
       { shoot: updatedShoot }
-    );
+      );
       
-    addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
+      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
   };
 
   const handleMarkPaid = async (shootId: string) => {
@@ -944,8 +1100,8 @@ function AppContent() {
     
     const updatedShoot = { 
       ...shoot, 
-      status: 'completed' as ShootStatus,
-      paid: true
+            status: 'completed' as ShootStatus,
+            paid: true
     };
     
     // Save to API first
@@ -956,7 +1112,7 @@ function AppContent() {
     // Send payment complete email via SMTP
     emailPaymentComplete(updatedShoot);
     
-    addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
+      addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
     
     setSelectedShootId(null);
   };
@@ -1232,6 +1388,17 @@ function AppContent() {
           catalogItems={catalogItems}
           onClose={() => setViewMode('dashboard')}
           onSubmit={handleCreateRequest}
+          onAddCatalogItem={async (newItem) => {
+            // Add to local state
+            setCatalogItems(prev => [...prev, newItem]);
+            // Save to API
+            try {
+              await saveCatalogItemToAPI(newItem);
+              console.log('✅ New equipment saved to catalog:', newItem.name);
+            } catch (error) {
+              console.error('Failed to save equipment to API:', error);
+            }
+          }}
         />
       )}
 
