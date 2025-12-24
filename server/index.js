@@ -35,51 +35,185 @@ transporter.verify((error, success) => {
   }
 });
 
+// Helper function to format equipment list with owner and price
+const formatEquipmentList = (equipment) => {
+  if (!equipment || equipment.length === 0) return '<p style="color: #666;">No equipment listed</p>';
+  
+  return `
+    <table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+      <thead>
+        <tr style="background: #f8f9fa;">
+          <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6; color: #333;">Item</th>
+          <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6; color: #333;">Qty</th>
+          <th style="padding: 10px; text-align: right; border-bottom: 2px solid #dee2e6; color: #333;">Rate/Day</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${equipment.map(eq => `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #333;">${eq.name || eq.itemName || '-'}</td>
+            <td style="padding: 10px; text-align: center; border-bottom: 1px solid #eee; color: #666;">${eq.quantity || eq.qty || 1}</td>
+            <td style="padding: 10px; text-align: right; border-bottom: 1px solid #eee; color: #333;">₹${(eq.dailyRate || eq.rate || eq.expectedRate || 0).toLocaleString()}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+};
+
+// Calculate total budget from equipment
+const calculateBudget = (equipment) => {
+  if (!equipment || equipment.length === 0) return 0;
+  return equipment.reduce((total, eq) => {
+    const qty = eq.quantity || eq.qty || 1;
+    const rate = eq.dailyRate || eq.rate || eq.expectedRate || 0;
+    return total + (qty * rate);
+  }, 0);
+};
+
 // Email templates
 const emailTemplates = {
-  // 1. New shoot request created - notify vendor
-  newRequest: (shoot) => ({
-    subject: `🎬 New Equipment Request: ${shoot.name}`,
-    html: `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">🎬 ShootFlow</h1>
-          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">New Equipment Request</p>
-        </div>
-        <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <h2 style="color: #333; margin-top: 0;">Hi,</h2>
-          <p style="color: #666; line-height: 1.6;">A new equipment request has been submitted and requires your quote.</p>
-          
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #333; margin-top: 0;">📋 Request Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 8px 0; color: #666;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Date:</td><td style="padding: 8px 0; color: #333;">${shoot.date || 'TBD'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Location:</td><td style="padding: 8px 0; color: #333;">${shoot.location || 'TBD'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Duration:</td><td style="padding: 8px 0; color: #333;">${shoot.duration || 'TBD'}</td></tr>
-              <tr><td style="padding: 8px 0; color: #666;">Requested by:</td><td style="padding: 8px 0; color: #333;">${shoot.requestor?.name || 'Team'}</td></tr>
-            </table>
+  // 1. New shoot request created (SINGLE SHOOT) - notify approver
+  newRequest: (shoot) => {
+    const recipientName = shoot.recipientName || 'Team';
+    const equipment = shoot.equipment || [];
+    const totalItems = equipment.length;
+    const estimatedBudget = calculateBudget(equipment);
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    return {
+      subject: `🔔 ACTION REQUIRED: New Shoot Request - ${shoot.name}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">The Pre-Production team has submitted a new equipment requirement.</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #667eea;">
+              <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📋 SHOOT DETAILS</h3>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">${shoot.name}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Dates:</td><td style="padding: 8px 0; color: #333;">${shoot.date || shoot.dates || 'TBD'}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Requested By:</td><td style="padding: 8px 0; color: #333;">${shoot.requestor?.name || 'Pre-Production Team'}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Total Items:</td><td style="padding: 8px 0; color: #333;">${totalItems}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666;">Estimated Budget:</td><td style="padding: 8px 0; color: #333; font-weight: 600;">₹${estimatedBudget.toLocaleString()}</td></tr>
+              </table>
+            </div>
+            
+            <div style="margin: 25px 0;">
+              <h3 style="color: #333; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📦 EQUIPMENT LIST</h3>
+              ${formatEquipmentList(equipment)}
+            </div>
+            
+            <div style="background: #fff3cd; padding: 15px 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107;">
+              <h4 style="color: #856404; margin: 0 0 10px 0; font-size: 14px;">📋 NEXT STEP</h4>
+              <p style="color: #856404; margin: 0;">Please review the list and forward it to Gopala Media for a final quote.</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+                Review & Send to Vendor →
+              </a>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
           </div>
-          
-          <h4 style="color: #333;">🎥 Equipment Required:</h4>
-          <ul style="color: #666; line-height: 1.8;">
-            ${(shoot.equipment || []).map(eq => `<li>${eq.name} ${eq.quantity ? `(Qty: ${eq.quantity})` : ''}</li>`).join('')}
-          </ul>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.APP_URL || 'https://pre-production-poc.up.railway.app'}?vendor=${shoot.id}" 
-               style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
-              Submit Your Quote →
-            </a>
-          </div>
-          
-          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            This is an automated message from ShootFlow. Please do not reply directly to this email.
-          </p>
         </div>
-      </div>
-    `
-  }),
+      `
+    };
+  },
+
+  // 1b. New shoot request created (MULTI SHOOT - 2 shoots) - notify approver
+  newRequestMulti: (data) => {
+    const recipientName = data.recipientName || 'Team';
+    const shoot1 = data.shoots?.[0] || data.shoot1 || {};
+    const shoot2 = data.shoots?.[1] || data.shoot2 || {};
+    const allEquipment = [...(shoot1.equipment || []), ...(shoot2.equipment || [])];
+    const totalItems = allEquipment.length;
+    const estimatedBudget = calculateBudget(allEquipment);
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    
+    return {
+      subject: `🔔 ACTION REQUIRED: New Equipment Request - ${shoot1.name || 'Shoot 1'} & ${shoot2.name || 'Shoot 2'}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px; margin-top: 0;">Hi ${recipientName},</p>
+            <p style="color: #666; line-height: 1.6;">The Pre-Production team has submitted a new equipment requirement for <strong>two shoots</strong>.</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #667eea;">
+              <h3 style="color: #333; margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📋 SHOOT DETAILS</h3>
+              
+              <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
+                <h4 style="color: #667eea; margin: 0 0 10px 0;">Shoot 1</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">${shoot1.name || 'TBD'}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Dates:</td><td style="padding: 6px 0; color: #333;">${shoot1.date || shoot1.dates || 'TBD'}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Requested By:</td><td style="padding: 6px 0; color: #333;">${shoot1.requestor?.name || 'Pre-Production Team'}</td></tr>
+                </table>
+              </div>
+              
+              <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
+                <h4 style="color: #667eea; margin: 0 0 10px 0;">Shoot 2</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Shoot Name:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">${shoot2.name || 'TBD'}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Dates:</td><td style="padding: 6px 0; color: #333;">${shoot2.date || shoot2.dates || 'TBD'}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Requested By:</td><td style="padding: 6px 0; color: #333;">${shoot2.requestor?.name || 'Pre-Production Team'}</td></tr>
+                </table>
+              </div>
+              
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                <h4 style="color: #333; margin: 0 0 10px 0;">Summary</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr><td style="padding: 6px 0; color: #666; width: 140px;">Total Items:</td><td style="padding: 6px 0; color: #333;">${totalItems}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Estimated Budget:</td><td style="padding: 6px 0; color: #333; font-weight: 600;">₹${estimatedBudget.toLocaleString()}</td></tr>
+                </table>
+              </div>
+            </div>
+            
+            <div style="margin: 25px 0;">
+              <h3 style="color: #333; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">📦 EQUIPMENT LIST</h3>
+              
+              ${shoot1.equipment && shoot1.equipment.length > 0 ? `
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 1 Equipment</h4>
+                ${formatEquipmentList(shoot1.equipment)}
+              ` : ''}
+              
+              ${shoot2.equipment && shoot2.equipment.length > 0 ? `
+                <h4 style="color: #667eea; margin: 20px 0 10px 0;">Shoot 2 Equipment</h4>
+                ${formatEquipmentList(shoot2.equipment)}
+              ` : ''}
+            </div>
+            
+            <div style="background: #fff3cd; padding: 15px 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #ffc107;">
+              <h4 style="color: #856404; margin: 0 0 10px 0; font-size: 14px;">📋 NEXT STEP</h4>
+              <p style="color: #856404; margin: 0;">Please review the list and forward it to Gopala Media for a final quote.</p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" 
+                 style="background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+                Review & Send to Vendor →
+              </a>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #999; font-size: 12px; margin: 0;">
+              This is an automated message from ShootFlow. Please do not reply directly to this email.
+            </p>
+          </div>
+        </div>
+      `
+    };
+  },
 
   // 2. Vendor submits quote - notify approver
   quoteSubmitted: (shoot) => ({

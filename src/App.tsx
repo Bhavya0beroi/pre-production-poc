@@ -239,7 +239,7 @@ function AppContent() {
   const triggerEmail = async (
     shootId: string, 
     shootName: string, 
-    emailType: 'new_request' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'invoice_reminder' | 'invoice_uploaded',
+    emailType: 'new_request' | 'new_request_multi' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'invoice_reminder' | 'invoice_uploaded',
     recipientEmail: string,
     additionalData?: {
       dates?: string;
@@ -248,12 +248,14 @@ function AppContent() {
       quoteAmount?: number;
       location?: string;
       requestorName?: string;
-      equipmentList?: Array<{ name: string; dailyRate: number }>;
+      equipmentList?: Array<{ name: string; dailyRate: number; quantity?: number }>;
       shoot?: Shoot;
+      shoots?: any[]; // For multi-shoot requests
     }
   ) => {
     const emailSubjects: Record<string, string> = {
       new_request: `🔔 ACTION REQUIRED: New Shoot Request - ${shootName}`,
+      new_request_multi: `🔔 ACTION REQUIRED: New Equipment Request - ${shootName}`,
       sent_to_vendor: `🔗 Action Required: Send vendor link for ${shootName}`,
       quote_submitted: `✅ Vendor Quote Received: ${shootName}`,
       approved: `🎉 Quote Approved: ${shootName} - Ready for Shoot`,
@@ -264,11 +266,15 @@ function AppContent() {
     // Map email types to SMTP templates
     const templateMap: Record<string, string> = {
       new_request: 'newRequest',
+      new_request_multi: 'newRequestMulti',
       sent_to_vendor: 'newRequest',
       quote_submitted: 'quoteSubmitted',
       approved: 'quoteApproved',
       invoice_uploaded: 'invoiceUploaded',
     };
+
+    // Get recipient name from email
+    const recipientName = recipientEmail.split('@')[0].split('.').map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(' ');
 
     // Get shoot data for email template
     const shootData = additionalData?.shoot || shoots.find(s => s.id === shootId) || {
@@ -276,11 +282,18 @@ function AppContent() {
       name: shootName,
       date: additionalData?.dates || 'TBD',
       location: additionalData?.location || 'TBD',
-      equipment: additionalData?.equipmentList?.map(e => ({ name: e.name, dailyRate: e.dailyRate })) || [],
+      equipment: additionalData?.equipmentList?.map(e => ({ name: e.name, dailyRate: e.dailyRate, quantity: e.quantity || 1 })) || [],
       requestor: { name: additionalData?.requestorName || 'ShootFlow Team', email: recipientEmail },
       vendorQuote: { amount: additionalData?.quoteAmount || 0, notes: '' },
       approvedAmount: additionalData?.quoteAmount || 0,
+      recipientName: recipientName,
     };
+
+    // For multi-shoot, add shoots array
+    if (emailType === 'new_request_multi' && additionalData?.shoots) {
+      (shootData as any).shoots = additionalData.shoots;
+      (shootData as any).recipientName = recipientName;
+    }
 
     // Create the email for UI notification
     const newEmail: EmailMessage = {
@@ -1032,28 +1045,34 @@ function AppContent() {
       // Change view
       setViewMode('dashboard');
       
-      // Trigger email for the first shoot (or combine info)
+      // Trigger email for multi-shoot request
       const firstShoot = requestData.shoots[0];
-      const dateStr = `${new Date(firstShoot.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(firstShoot.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      const secondShoot = requestData.shoots[1];
+      
+      // Format shoot data for email template
+      const shootsForEmail = requestData.shoots.map((s: any) => ({
+        name: s.shootName,
+        date: `${new Date(s.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(s.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        dates: `${new Date(s.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(s.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        requestor: { name: s.requestorName || 'Pre-Production Team' },
+        equipment: s.equipment.map((item: any) => ({
+          name: item.name,
+          dailyRate: item.dailyRate || 0,
+          quantity: item.quantity || 1,
+        })),
+      }));
       
       setTimeout(() => {
         triggerEmail(
           newShoots[0].id, 
-          `${requestData.shoots.length} Shoots Request`, 
-          'new_request', 
-          firstShoot.approvalEmail || 'anish@company.com',
+          `${firstShoot.shootName}${secondShoot ? ` & ${secondShoot.shootName}` : ''}`, 
+          'new_request_multi', 
+          firstShoot.approvalEmail || DEFAULT_RECIPIENTS.approver,
           {
-            dates: dateStr,
             itemCount: requestData.shoots.reduce((sum: number, s: any) => sum + s.equipment.length, 0),
             estimatedBudget: requestData.shoots.reduce((sum: number, s: any) => sum + (s.totalBudget || 0), 0),
-            requestorName: firstShoot.requestorName || 'ShootFlow Team',
-            equipmentList: requestData.shoots.flatMap((s: any) => 
-              s.equipment.map((item: any) => ({
-                name: `[${s.shootName}] ${item.name}`,
-                dailyRate: item.dailyRate || 0,
-                quantity: item.quantity || 1,
-              }))
-            ),
+            requestorName: firstShoot.requestorName || 'Pre-Production Team',
+            shoots: shootsForEmail,
           }
         );
       }, 300);
@@ -1082,16 +1101,22 @@ function AppContent() {
         newShoot.id, 
         requestData.shootName, 
         'new_request', 
-        requestData.approvalEmail || 'anish@company.com',
+        requestData.approvalEmail || DEFAULT_RECIPIENTS.approver,
         {
           dates: dateStr,
           itemCount: requestData.equipment.length,
           estimatedBudget: requestData.totalBudget || 0,
-          requestorName: requestData.requestorName || 'ShootFlow Team',
+          requestorName: requestData.requestorName || 'Pre-Production Team',
           equipmentList: requestData.equipment.map((item: any) => ({
             name: item.name,
             dailyRate: item.dailyRate || 0,
+            quantity: item.quantity || 1,
           })),
+          shoot: {
+            ...newShoot,
+            date: dateStr,
+            dates: dateStr,
+          }
         }
       );
     }, 300);
