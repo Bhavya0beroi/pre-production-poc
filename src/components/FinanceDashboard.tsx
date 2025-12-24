@@ -48,6 +48,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [selectedMonthStart, setSelectedMonthStart] = useState<string>('');
+  const [selectedMonthEnd, setSelectedMonthEnd] = useState<string>('');
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
   const openPdfViewer = (shoot: Shoot) => {
@@ -240,7 +242,19 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   // Chart data
   const chartData = useMemo(() => {
     if (chartView === 'monthly') {
-      const data = monthOrder.map(monthKey => {
+      // Filter months based on selection
+      let filteredMonths = [...monthOrder];
+      
+      if (selectedMonthStart || selectedMonthEnd) {
+        const startIdx = selectedMonthStart ? monthOrder.indexOf(selectedMonthStart) : 0;
+        const endIdx = selectedMonthEnd ? monthOrder.indexOf(selectedMonthEnd) : monthOrder.length - 1;
+        
+        if (startIdx !== -1 && endIdx !== -1) {
+          filteredMonths = monthOrder.filter((_, idx) => idx >= startIdx && idx <= endIdx);
+        }
+      }
+      
+      const data = filteredMonths.map(monthKey => {
         const monthShoots = groupedInvoices[monthKey] || [];
         const total = getMonthTotal(monthShoots);
         const shootNames = monthShoots.map(s => s.title || s.name || 'Unnamed Shoot');
@@ -302,7 +316,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         const monthName = shortMonthNames[current.getMonth() + 1];
         
         allDays.push({
-          name: `${dayName}`,
+          name: `${dayNum}`,
           fullName: `${dayName}, ${monthName} ${dayNum}`,
           amount: dailyData[dateKey]?.amount || 0,
           shoots: dailyData[dateKey]?.shoots || 0,
@@ -313,30 +327,36 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       
       return allDays;
     }
-  }, [chartView, selectedStartDate, selectedEndDate, invoiceData, groupedInvoices, monthOrder]);
+  }, [chartView, selectedStartDate, selectedEndDate, selectedMonthStart, selectedMonthEnd, invoiceData, groupedInvoices, monthOrder]);
 
   // Custom tooltip for chart
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const shootNames = data.shootNames || [];
+      const shootNames: string[] = data.shootNames || [];
+      const amount = Number(payload[0].value) || 0;
       
       return (
-        <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-200 max-w-xs">
-          <p className="font-semibold text-gray-900 mb-2">{data.fullName}</p>
-          <p className="text-lg font-bold" style={{ color: '#FF6B6B' }}>₹{payload[0].value.toLocaleString()}</p>
-          {shootNames.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-gray-100">
-              <p className="text-xs text-gray-400 mb-1">{shootNames.length} Shoot{shootNames.length > 1 ? 's' : ''}:</p>
-              <div className="space-y-1">
-                {shootNames.slice(0, 5).map((name: string, idx: number) => (
-                  <p key={idx} className="text-sm text-gray-700 truncate">• {name}</p>
+        <div className="bg-white p-4 rounded-xl shadow-xl border border-gray-200" style={{ minWidth: '200px', maxWidth: '300px' }}>
+          <p className="font-bold text-gray-900 text-base mb-1">{data.fullName}</p>
+          <p className="text-xl font-bold mb-2" style={{ color: '#FF6B6B' }}>₹{amount.toLocaleString()}</p>
+          
+          {shootNames.length > 0 ? (
+            <div className="pt-2 border-t border-gray-200">
+              <p className="text-xs font-medium text-gray-500 mb-2">
+                {shootNames.length} Shoot{shootNames.length > 1 ? 's' : ''}:
+              </p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {shootNames.map((name: string, idx: number) => (
+                  <p key={idx} className="text-sm text-gray-700 flex items-start gap-1">
+                    <span className="text-gray-400">•</span>
+                    <span className="truncate">{name}</span>
+                  </p>
                 ))}
-                {shootNames.length > 5 && (
-                  <p className="text-xs text-gray-400">+{shootNames.length - 5} more</p>
-                )}
               </div>
             </div>
+          ) : (
+            <p className="text-xs text-gray-400 pt-2 border-t border-gray-200">No shoots</p>
           )}
         </div>
       );
@@ -399,21 +419,33 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               <p className="text-gray-400 text-sm">Track payments and spending trends</p>
             </div>
             {/* View Toggle */}
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setViewMode('list')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  backgroundColor: viewMode === 'list' ? '#2563EB' : '#F3F4F6',
+                  color: viewMode === 'list' ? '#FFFFFF' : '#4B5563',
+                  boxShadow: viewMode === 'list' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                }}
               >
                 <List className="w-4 h-4" />
                 List
               </button>
               <button
                 onClick={() => setViewMode('chart')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'chart' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  lineHeight: '1',
+                  backgroundColor: viewMode === 'chart' ? '#2563EB' : '#F3F4F6',
+                  color: viewMode === 'chart' ? '#FFFFFF' : '#4B5563',
+                  boxShadow: viewMode === 'chart' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                }}
               >
                 <BarChart3 className="w-4 h-4" />
                 Chart
@@ -544,7 +576,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                         className="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700"
                       >
                         Apply
-                      </button>
+            </button>
                     </div>
                   </div>
                 )}
@@ -587,6 +619,40 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 >
                   Weekly
                 </button>
+                
+                {/* Month Selector for Monthly view */}
+                {chartView === 'monthly' && (
+                  <div className="flex items-center gap-2 ml-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-500">From:</label>
+                      <select
+                        value={selectedMonthStart}
+                        onChange={(e) => setSelectedMonthStart(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">All</option>
+                        {monthOrder.map(m => (
+                          <option key={m} value={m}>{formatMonthKey(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-500">To:</label>
+                      <select
+                        value={selectedMonthEnd}
+                        onChange={(e) => setSelectedMonthEnd(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">All</option>
+                        {monthOrder.map(m => (
+                          <option key={m} value={m}>{formatMonthKey(m)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Date Selector for Weekly view */}
                 {chartView === 'daily' && (
                   <div className="flex items-center gap-2 ml-2">
                     <div className="flex items-center gap-2">
@@ -675,12 +741,29 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 {monthOrder.slice(-6).map(monthKey => {
                   const monthShoots = groupedInvoices[monthKey] || [];
                   const total = getMonthTotal(monthShoots);
+                  const [year, month] = monthKey.split('-').map(Number);
+                  const isSelected = selectedMonthStart === monthKey || selectedMonthEnd === monthKey || 
+                    (selectedMonthStart === monthKey && selectedMonthEnd === monthKey);
                   
                   return (
                     <div
                       key={monthKey}
-                      className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
-                      onClick={() => { setChartView('daily'); setSelectedMonth(monthKey); }}
+                      className={`bg-white rounded-xl border p-4 hover:shadow-md transition-all cursor-pointer ${
+                        isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                      }`}
+                      onClick={() => {
+                        // Set both monthly filter to this month and switch to daily view with date range
+                        setSelectedMonthStart(monthKey);
+                        setSelectedMonthEnd(monthKey);
+                        
+                        // Also set daily view with full month date range
+                        // month from monthKey is 0-based (04 = May), so use directly
+                        const startDate = new Date(year, month, 1);
+                        const endDate = new Date(year, month + 1, 0); // Last day of month
+                        setSelectedStartDate(`${year}-${String(month + 1).padStart(2, '0')}-01`);
+                        setSelectedEndDate(`${year}-${String(month + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`);
+                        setChartView('daily');
+                      }}
                       style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
                     >
                       <div className="text-sm text-gray-500">{formatMonthKey(monthKey)}</div>
@@ -693,7 +776,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             </div>
           ) : (
             /* List View */
-            <div className="space-y-4">
+            <div className="space-y-6">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
               if (!monthInvoices || monthInvoices.length === 0) return null;
@@ -703,7 +786,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 const paidCount = getMonthPaidCount(monthInvoices);
               
               return (
-                  <div key={monthKey} className="bg-white rounded-xl border border-gray-200 overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                  <div key={monthKey} className="bg-white rounded-xl border border-gray-200 mb-2" style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
                     <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-3">
                         {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
@@ -767,17 +850,19 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                 
                                 {/* Equipment Details */}
                                 {isInvoiceExpanded && hasEquipment && (
-                                  <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg overflow-hidden">
-                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Equipment Details</div>
+                                  <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg">
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                                      Equipment Details ({invoice.equipment.length} items)
+                                    </div>
                                     <div className="overflow-x-auto">
-                                      <table className="w-full text-sm table-fixed border-collapse">
+                                      <table className="w-full text-sm border-collapse min-w-full">
                                         <thead>
-                                          <tr className="text-left text-gray-500 text-xs">
-                                            <th className="pb-2 pr-2 font-medium border-b border-gray-200" style={{ width: '40%' }}>Item</th>
-                                            <th className="pb-2 px-2 font-medium text-center border-b border-gray-200" style={{ width: '12%' }}>Qty</th>
-                                            <th className="pb-2 px-2 font-medium text-right border-b border-gray-200" style={{ width: '18%' }}>Rate</th>
-                                            <th className="pb-2 px-2 font-medium text-center border-b border-gray-200" style={{ width: '12%' }}>Days</th>
-                                            <th className="pb-2 pl-2 font-medium text-right border-b border-gray-200" style={{ width: '18%' }}>Total</th>
+                                          <tr className="text-left text-gray-500 text-xs bg-gray-100">
+                                            <th className="py-2 px-3 font-medium border-b border-gray-200">Item</th>
+                                            <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Qty</th>
+                                            <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Rate</th>
+                                            <th className="py-2 px-3 font-medium text-center border-b border-gray-200">Days</th>
+                                            <th className="py-2 px-3 font-medium text-right border-b border-gray-200">Total</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -787,20 +872,20 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                             const days = item.days || item.rentalDays || 1;
                                             const total = item.total || item.totalCost || (qty * rate * days);
                                             return (
-                                              <tr key={idx} className="border-b border-gray-200">
-                                                <td className="py-2 pr-2 text-gray-900 truncate">{item.name || item.itemName || '-'}</td>
-                                                <td className="py-2 px-2 text-center text-gray-600">{qty}</td>
-                                                <td className="py-2 px-2 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
-                                                <td className="py-2 px-2 text-center text-gray-600">{days}</td>
-                                                <td className="py-2 pl-2 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
+                                              <tr key={idx} className="border-b border-gray-200 hover:bg-gray-100">
+                                                <td className="py-2 px-3 text-gray-900">{item.name || item.itemName || '-'}</td>
+                                                <td className="py-2 px-3 text-center text-gray-600">{qty}</td>
+                                                <td className="py-2 px-3 text-right text-gray-600">₹{Number(rate).toLocaleString()}</td>
+                                                <td className="py-2 px-3 text-center text-gray-600">{days}</td>
+                                                <td className="py-2 px-3 text-right font-medium text-gray-900">₹{Number(total).toLocaleString()}</td>
                             </tr>
                                             );
                                           })}
                         </tbody>
                                         <tfoot>
-                                          <tr className="border-t-2 border-gray-400 bg-gray-100">
-                                            <td colSpan={4} className="py-2 pr-2 font-semibold text-gray-900">Total</td>
-                                            <td className="py-2 pl-2 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
+                                          <tr className="border-t-2 border-gray-400 bg-gray-200">
+                                            <td colSpan={4} className="py-2 px-3 font-semibold text-gray-900">Total</td>
+                                            <td className="py-2 px-3 text-right font-bold" style={{ color: '#27AE60' }}>₹{invoice.amount.toLocaleString()}</td>
                                           </tr>
                                         </tfoot>
                       </table>
