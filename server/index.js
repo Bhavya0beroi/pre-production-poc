@@ -12,25 +12,71 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ============================================
-// EMAIL CONFIGURATION (Gmail SMTP)
+// EMAIL CONFIGURATION (Resend HTTP API - works on Railway!)
 // ============================================
 
-// Gmail SMTP credentials - use app password
-const SMTP_USER = process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
-const SMTP_PASS = process.env.SMTP_PASS || 'xvtukcpvmsggcvb'; // Gmail app password (no spaces)
-const SMTP_FROM = process.env.SMTP_FROM || 'bhavya.oberoi@learnapp.co';
+// Get Resend API key from environment (sign up at resend.com for free)
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev'; // Use resend.dev for testing
 
-console.log('📧 Configuring Gmail SMTP...');
-console.log('   User:', SMTP_USER);
+console.log('📧 Email Configuration:');
+console.log('   Using: Resend HTTP API');
+console.log('   API Key configured:', RESEND_API_KEY ? 'Yes' : 'No (emails will be logged only)');
+console.log('   From:', EMAIL_FROM);
 
-// Gmail SMTP transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS.replace(/\s/g, '') // Remove any spaces from app password
+// Resend email sender using HTTP API (bypasses SMTP port blocking)
+async function sendEmailViaResend(to, subject, html) {
+  if (!RESEND_API_KEY) {
+    console.log('📧 [DEMO MODE] Email would be sent:');
+    console.log('   To:', to);
+    console.log('   Subject:', subject);
+    return { messageId: `demo-${Date.now()}`, demo: true };
   }
-});
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: EMAIL_FROM,
+        to: to,
+        subject: subject,
+        html: html
+      })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('❌ Resend API error:', data);
+      throw new Error(data.message || 'Failed to send email');
+    }
+
+    console.log('✅ Email sent via Resend:', data.id);
+    return { messageId: data.id };
+  } catch (error) {
+    console.error('❌ Resend email failed:', error.message);
+    throw error;
+  }
+}
+
+// Transporter-like interface for compatibility with existing code
+const transporter = {
+  verify: (callback) => {
+    if (RESEND_API_KEY) {
+      console.log('✅ Resend API configured and ready');
+    } else {
+      console.log('⚠️ Resend API key not set - emails will be logged only (demo mode)');
+    }
+    callback(null, true);
+  },
+  sendMail: async (options) => {
+    return sendEmailViaResend(options.to, options.subject, options.html);
+  }
+};
 
 // Verify email connection on startup
 transporter.verify((error, success) => {
