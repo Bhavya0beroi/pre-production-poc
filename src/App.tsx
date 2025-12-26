@@ -23,13 +23,24 @@ import {
 } from './services/emailService';
 
 // API URL - automatically use production in deployed environment
-const API_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' 
-    ? 'http://localhost:3001' 
-    : 'https://divine-nature-production-c49a.up.railway.app');
+const getApiUrl = () => {
+  // Check for environment variable first
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // Check if running locally
+  if (typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:3001';
+  }
+  // Default to production API
+  return 'https://divine-nature-production-c49a.up.railway.app';
+};
+
+const API_URL = getApiUrl();
 
 // Log API URL for debugging
-console.log('API_URL:', API_URL, 'hostname:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+console.log('🔗 API_URL:', API_URL, '| hostname:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
 
 export type ShootStatus = 
   | 'new_request' 
