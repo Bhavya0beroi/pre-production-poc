@@ -15,23 +15,31 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // EMAIL CONFIGURATION
 // ============================================
 
-// SMTP transporter setup for Gmail
+// SMTP credentials
+const SMTP_USER = process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
+const SMTP_PASS = process.env.SMTP_PASS || 'xvtukcpvmsggcvb'; // App password without spaces
+
+// SMTP transporter setup for Gmail (using SSL on port 465 for better cloud compatibility)
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // TLS
+  service: 'gmail', // Use Gmail service directly
   auth: {
-    user: process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co',
-    pass: process.env.SMTP_PASS || 'xvtu kcpv mgsg gcvb'
-  }
+    user: SMTP_USER,
+    pass: SMTP_PASS
+  },
+  // Timeout settings for cloud environments
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 // Verify email connection on startup
 transporter.verify((error, success) => {
   if (error) {
     console.log('❌ Email server connection failed:', error.message);
+    console.log('   SMTP User:', SMTP_USER);
   } else {
     console.log('✅ Email server is ready to send messages');
+    console.log('   SMTP User:', SMTP_USER);
   }
 });
 
