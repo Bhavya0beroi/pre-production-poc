@@ -22,20 +22,14 @@ import {
   DEFAULT_RECIPIENTS 
 } from './services/emailService';
 
-// API URL - Production API (Railway backend)
-const PRODUCTION_API = 'https://divine-nature-production-c49a.up.railway.app';
-const LOCAL_API = 'http://localhost:3001';
+// API URL Configuration
+// In production (Railway), use the production API
+// In development (localhost), use local API
+const API_URL = import.meta.env.DEV 
+  ? 'http://localhost:3001' 
+  : 'https://divine-nature-production-c49a.up.railway.app';
 
-// Detect environment at runtime
-const isLocalhost = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-const API_URL = import.meta.env.VITE_API_URL || (isLocalhost ? LOCAL_API : PRODUCTION_API);
-
-// Log API URL for debugging
-console.log('🔗 ShootFlow API:', API_URL);
-console.log('🌐 Running on:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
-console.log('📍 Is localhost:', isLocalhost);
+console.log('🔗 API:', API_URL, '| Mode:', import.meta.env.DEV ? 'DEV' : 'PROD');
 
 export type ShootStatus = 
   | 'new_request' 
@@ -593,18 +587,22 @@ function AppContent() {
       }
 
       try {
-        console.log('Trying to load data from API:', API_URL);
+        const apiEndpoint = `${API_URL}/api/shoots`;
+        console.log('📡 Fetching shoots from:', apiEndpoint);
         
         // Try to load shoots from API
-        const shootsResponse = await fetch(`${API_URL}/api/shoots`, { 
-          signal: AbortSignal.timeout(10000) // 10 second timeout
+        const shootsResponse = await fetch(apiEndpoint, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
         });
         
-        console.log('Shoots API response status:', shootsResponse.status);
+        console.log('📡 Response status:', shootsResponse.status, shootsResponse.statusText);
         
         if (shootsResponse.ok) {
           const shootsData = await shootsResponse.json();
-          console.log('Shoots data received:', shootsData?.length, 'items');
+          console.log('✅ Shoots loaded:', shootsData?.length, 'items');
           // Only use API data if we got a valid response
           if (Array.isArray(shootsData)) {
             const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
