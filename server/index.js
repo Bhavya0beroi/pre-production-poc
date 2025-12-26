@@ -16,7 +16,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ============================================
 
 // Get Resend API key from environment (sign up at resend.com for free)
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gPwuFNvg_JEL3arzPU7QApcCZz7CW5xFu';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev'; // Use resend.dev for testing
 
 console.log('📧 Email Configuration:');
