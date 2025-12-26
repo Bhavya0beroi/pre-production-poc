@@ -585,7 +585,7 @@ async function sendEmail(to, template, shoot, threadMessageId = null) {
     const mailOptions = {
       from: {
         name: 'ShootFlow',
-        address: SMTP_FROM
+        address: EMAIL_FROM
       },
       to: to,
       subject: emailContent.subject,
