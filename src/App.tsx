@@ -22,9 +22,11 @@ import {
   DEFAULT_RECIPIENTS 
 } from './services/emailService';
 
-// API URL - switch between local and production
-const API_URL = 'http://localhost:3001'; // LOCAL TESTING
-// const API_URL = 'https://divine-nature-production-c49a.up.railway.app'; // PRODUCTION
+// API URL - automatically use production in deployed environment
+const API_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001' 
+    : 'https://divine-nature-production-c49a.up.railway.app');
 
 export type ShootStatus = 
   | 'new_request' 
