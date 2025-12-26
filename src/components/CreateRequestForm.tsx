@@ -316,7 +316,12 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
     e.preventDefault();
     
     // Prevent double submission
-    if (isSubmitting) return;
+    if (isSubmitting) {
+      console.log('Already submitting, ignoring click');
+      return;
+    }
+    
+    console.log('Starting submission...');
     setIsSubmitting(true);
     
     try {
@@ -348,6 +353,8 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
         requestGroupId,
       }));
 
+      console.log('Submitting data:', shoots.length === 1 ? 'single shoot' : `${shoots.length} shoots`);
+
       // Pass all shoots as an array if multiple, or single object if one
       if (shoots.length === 1) {
         await onSubmit(allShootsData[0]);
@@ -359,8 +366,11 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
           requestGroupId 
         });
       }
+      
+      console.log('Submission completed successfully');
     } catch (error) {
       console.error('Error submitting request:', error);
+      alert('Error submitting request. Please try again.');
       // Reset submitting state on error so user can retry
       setIsSubmitting(false);
     }
@@ -1120,7 +1130,14 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
           
           {/* Submit Button */}
           <button
-            onClick={handleSubmit}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isSubmitting && isFormValid()) {
+                handleSubmit(e);
+              }
+            }}
             disabled={!isFormValid() || isSubmitting}
             className="px-6 py-2.5 rounded-lg text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium hover:opacity-90"
             style={{ backgroundColor: '#2D60FF' }}
