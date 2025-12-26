@@ -22,25 +22,20 @@ import {
   DEFAULT_RECIPIENTS 
 } from './services/emailService';
 
-// API URL - automatically use production in deployed environment
-const getApiUrl = () => {
-  // Check for environment variable first
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  // Check if running locally
-  if (typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:3001';
-  }
-  // Default to production API
-  return 'https://divine-nature-production-c49a.up.railway.app';
-};
+// API URL - Production API (Railway backend)
+const PRODUCTION_API = 'https://divine-nature-production-c49a.up.railway.app';
+const LOCAL_API = 'http://localhost:3001';
 
-const API_URL = getApiUrl();
+// Detect environment at runtime
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_URL = import.meta.env.VITE_API_URL || (isLocalhost ? LOCAL_API : PRODUCTION_API);
 
 // Log API URL for debugging
-console.log('🔗 API_URL:', API_URL, '| hostname:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+console.log('🔗 ShootFlow API:', API_URL);
+console.log('🌐 Running on:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+console.log('📍 Is localhost:', isLocalhost);
 
 export type ShootStatus = 
   | 'new_request' 
@@ -678,11 +673,13 @@ function AppContent() {
           setCatalogItems(defaultCatalogItems);
         }
       } catch (error) {
-        console.error('API not available, using localStorage data. Error:', error);
-        // Keep localStorage data as fallback
+        console.error('❌ API not available. Error:', error);
+        // Show alert for debugging on production
+        if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+          console.error('Failed to load from API:', API_URL);
+        }
       } finally {
         setIsLoadingData(false);
-        console.log('Data loading complete. Shoots count:', shoots.length);
       }
     };
 

@@ -34,6 +34,9 @@ type ViewMode = 'list' | 'chart';
 type ChartView = 'monthly' | 'daily';
 
 export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive }: FinanceDashboardProps) {
+  // Debug log
+  console.log('📊 FinanceDashboard received', shoots?.length || 0, 'shoots');
+  
   const { isAdmin } = useAuth();
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
