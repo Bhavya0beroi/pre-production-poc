@@ -91,9 +91,9 @@ export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_re
 
 // LocalStorage keys - v2 to clear old data
 const STORAGE_KEYS = {
-  SHOOTS: 'shootflow_shoots_v2',
-  CATALOG: 'shootflow_catalog_v2',
-  NOTIFICATIONS: 'shootflow_notifications_v2',
+  SHOOTS: 'shootflow_shoots_v3',  // Changed to v3 to clear old cached data
+  CATALOG: 'shootflow_catalog_v3',
+  NOTIFICATIONS: 'shootflow_notifications_v3',
   VIEW_MODE: 'shootflow_viewMode',
   SELECTED_SHOOT: 'shootflow_selectedShoot',
 };
@@ -955,10 +955,10 @@ function AppContent() {
       // Send ONE email for all quote submissions
       if (submissions.length === 1) {
         // Single shoot - use regular quoteSubmitted template
-        triggerEmail(
+      triggerEmail(
           firstSubmission.shootId, 
           firstSubmission.shoot.name, 
-          'quote_submitted', 
+        'quote_submitted', 
           recipientEmail,
           {
             quoteAmount: firstSubmission.amount,
@@ -983,7 +983,7 @@ function AppContent() {
           firstSubmission.shootId, 
           `${submissions.length} Shoots Quote`,
           'quote_submitted', 
-          recipientEmail,
+        recipientEmail,
           {
             quoteAmount: totalQuoteAmount,
             shoot: combinedShootData
