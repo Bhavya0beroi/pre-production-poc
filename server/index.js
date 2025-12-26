@@ -17,31 +17,40 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // SMTP credentials
 const SMTP_USER = process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
-const SMTP_PASS = process.env.SMTP_PASS || 'xvtukcpvmsggcvb'; // App password without spaces
+const SMTP_PASS = process.env.SMTP_PASS || 'xvtu kcpv mgsg gcvb'; // App password with spaces
 
-// SMTP transporter setup for Gmail (using SSL on port 465 for better cloud compatibility)
+// SMTP transporter setup for Gmail using OAuth-compatible settings
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Use Gmail service directly
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // SSL
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS
   },
-  // Timeout settings for cloud environments
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certs
+  },
+  // Extended timeout settings for cloud environments
+  connectionTimeout: 30000, // 30 seconds
+  greetingTimeout: 30000,
+  socketTimeout: 60000,
+  pool: true, // Use pooled connections
+  maxConnections: 5,
+  maxMessages: 100,
 });
 
-// Verify email connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.log('❌ Email server connection failed:', error.message);
-    console.log('   SMTP User:', SMTP_USER);
-  } else {
-    console.log('✅ Email server is ready to send messages');
-    console.log('   SMTP User:', SMTP_USER);
-  }
-});
+// Verify email connection on startup (non-blocking)
+setTimeout(() => {
+  transporter.verify((error, success) => {
+    if (error) {
+      console.log('⚠️ Email server verification failed:', error.message);
+      console.log('   Will retry on first email send');
+    } else {
+      console.log('✅ Email server is ready to send messages');
+    }
+  });
+}, 5000);
 
 // Helper function to format equipment list with owner and price
 const formatEquipmentList = (equipment) => {
