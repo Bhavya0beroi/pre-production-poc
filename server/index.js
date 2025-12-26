@@ -81,10 +81,9 @@ const transporter = {
 // Verify email connection on startup
 transporter.verify((error, success) => {
   if (error) {
-    console.log('❌ Email server connection failed:', error.message);
+    console.log('❌ Email setup failed:', error.message);
   } else {
-    console.log('✅ Brevo email server is ready to send messages');
-    console.log('   SMTP Host:', SMTP_HOST);
+    console.log('✅ Resend email API is ready');
   }
 });
 
