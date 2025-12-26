@@ -12,45 +12,42 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ============================================
-// EMAIL CONFIGURATION
+// EMAIL CONFIGURATION (Brevo SMTP)
 // ============================================
 
-// SMTP credentials
-const SMTP_USER = process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
-const SMTP_PASS = process.env.SMTP_PASS || 'xvtu kcpv mgsg gcvb'; // App password with spaces
+// Brevo SMTP credentials
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+const SMTP_PORT = process.env.SMTP_PORT || 587;
+const SMTP_USER = process.env.SMTP_USER || '9ecb80001@smtp-brevo.com';
+const SMTP_PASS = process.env.SMTP_PASS || 'lOaMyb2Bvfx80q1P';
+const SMTP_FROM = process.env.SMTP_FROM || 'bhavya.oberoi@learnapp.co'; // From email address
 
-// SMTP transporter setup for Gmail using OAuth-compatible settings
+// SMTP transporter setup for Brevo
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // SSL
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: false, // TLS
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS
   },
   tls: {
-    rejectUnauthorized: false // Allow self-signed certs
+    rejectUnauthorized: false
   },
-  // Extended timeout settings for cloud environments
-  connectionTimeout: 30000, // 30 seconds
+  connectionTimeout: 30000,
   greetingTimeout: 30000,
   socketTimeout: 60000,
-  pool: true, // Use pooled connections
-  maxConnections: 5,
-  maxMessages: 100,
 });
 
-// Verify email connection on startup (non-blocking)
-setTimeout(() => {
-  transporter.verify((error, success) => {
-    if (error) {
-      console.log('⚠️ Email server verification failed:', error.message);
-      console.log('   Will retry on first email send');
-    } else {
-      console.log('✅ Email server is ready to send messages');
-    }
-  });
-}, 5000);
+// Verify email connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.log('❌ Email server connection failed:', error.message);
+  } else {
+    console.log('✅ Brevo email server is ready to send messages');
+    console.log('   SMTP Host:', SMTP_HOST);
+  }
+});
 
 // Helper function to format equipment list with owner and price
 const formatEquipmentList = (equipment) => {
@@ -550,7 +547,7 @@ async function sendEmail(to, template, shoot, threadMessageId = null) {
     const mailOptions = {
       from: {
         name: 'ShootFlow',
-        address: process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co'
+        address: SMTP_FROM
       },
       to: to,
       subject: emailContent.subject,
