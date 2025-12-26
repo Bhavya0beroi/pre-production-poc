@@ -16,7 +16,7 @@ import {
   BarChart3,
   List
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
 
@@ -50,6 +50,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [selectedMonthStart, setSelectedMonthStart] = useState<string>('');
   const [selectedMonthEnd, setSelectedMonthEnd] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
   const openPdfViewer = (shoot: Shoot) => {
@@ -328,6 +329,222 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       return allDays;
     }
   }, [chartView, selectedStartDate, selectedEndDate, selectedMonthStart, selectedMonthEnd, invoiceData, groupedInvoices, monthOrder]);
+
+  // Helper to infer category from equipment name
+  const inferCategory = (name: string, existingCategory?: string): string => {
+    if (existingCategory && existingCategory !== 'Other' && existingCategory !== 'NoCategory' && existingCategory !== 'Extra') {
+      return existingCategory;
+    }
+    const nameLower = (name || '').toLowerCase();
+    
+    // Camera - cameras and action cameras
+    if (nameLower.includes('camera') || nameLower.includes('sony') || nameLower.includes('canon') || 
+        nameLower.includes('a7') || nameLower.includes('fx3') || nameLower.includes('gopro') || 
+        nameLower.includes('red ') || nameLower.includes('arri') || nameLower.includes('blackmagic') ||
+        nameLower.includes('bmpcc') || nameLower.includes('hero')) return 'Camera';
+    
+    // Light - all lighting equipment
+    if (nameLower.includes('light') || nameLower.includes('led') || nameLower.includes('aputure') || 
+        nameLower.includes('godox') || nameLower.includes('amaran') || nameLower.includes('softbox') ||
+        nameLower.includes('nanlite') || nameLower.includes('chimera') || nameLower.includes('diffuser') ||
+        nameLower.includes('reflector') || nameLower.includes('scrim') || nameLower.includes('silk')) return 'Light';
+    
+    // Lens
+    if (nameLower.includes('lens') || nameLower.includes('gm') || nameLower.includes('prime') ||
+        nameLower.includes('zoom') || nameLower.includes('sigma') || nameLower.includes('zeiss') ||
+        nameLower.includes('nd filter') || nameLower.includes('filter')) return 'Lens';
+    
+    // Tripod & Support
+    if (nameLower.includes('tripod') || nameLower.includes('monopod') || nameLower.includes('gimbal') || 
+        nameLower.includes('slider') || nameLower.includes('dolly') || nameLower.includes('jib') ||
+        nameLower.includes('steadicam') || nameLower.includes('stabilizer')) return 'Tripod';
+    
+    // Audio
+    if (nameLower.includes('mic') || nameLower.includes('audio') || nameLower.includes('rode') || 
+        nameLower.includes('wireless') || nameLower.includes('lav') || nameLower.includes('boom') ||
+        nameLower.includes('recorder') || nameLower.includes('sound') || nameLower.includes('sennheiser')) return 'Audio';
+    
+    // Gaffer & Grip
+    if (nameLower.includes('gaffer') || nameLower.includes('grip') || nameLower.includes('c-stand') || 
+        nameLower.includes('flag') || nameLower.includes('frame') || nameLower.includes('cloth') ||
+        nameLower.includes('black cloth') || nameLower.includes('sandbag') || nameLower.includes('clamp') ||
+        nameLower.includes('magic arm') || nameLower.includes('arm')) return 'Gaffer';
+    
+    // Transport
+    if (nameLower.includes('transport') || nameLower.includes('vehicle') || nameLower.includes('car') ||
+        nameLower.includes('travel') || nameLower.includes('cab')) return 'Transport';
+    
+    // Assistant / Crew
+    if (nameLower.includes('assistant') || nameLower.includes('operator') || nameLower.includes('dop') ||
+        nameLower.includes('crew') || nameLower.includes('technician') || nameLower.includes('teleprompter')) return 'Assistant';
+    
+    // Small Equipment / Accessories
+    if (nameLower.includes('monitor') || nameLower.includes('ssd') || nameLower.includes('card') ||
+        nameLower.includes('battery') || nameLower.includes('charger') || nameLower.includes('cable') ||
+        nameLower.includes('accessor')) return 'Small Equipments';
+    
+    return 'Other';
+  };
+
+  // Category spending data for pie chart - uses the same total as the monthly chart
+  const categorySpendingData = useMemo(() => {
+    const categoryTotals: { [key: string]: { value: number; count: number } } = {};
+    
+    // Use the SAME shoots that chartData uses for consistency
+    // chartData uses all invoiceData grouped by month, so we use invoiceData directly
+    let shootsToAnalyze = [...invoiceData];
+    
+    // If daily view with date range, filter to match
+    if (chartView === 'daily' && selectedStartDate && selectedEndDate) {
+      const startDate = new Date(selectedStartDate);
+      const endDate = new Date(selectedEndDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      shootsToAnalyze = shootsToAnalyze.filter(invoice => {
+        const shootDate = getShootDateObj(invoice);
+        return shootDate && shootDate >= startDate && shootDate <= endDate;
+      });
+    }
+    
+    // If month range is selected, filter to match
+    if (chartView === 'monthly' && (selectedMonthStart || selectedMonthEnd)) {
+      const startIdx = selectedMonthStart ? monthOrder.indexOf(selectedMonthStart) : 0;
+      const endIdx = selectedMonthEnd ? monthOrder.indexOf(selectedMonthEnd) : monthOrder.length - 1;
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        const relevantMonths = monthOrder.filter((_, idx) => idx >= startIdx && idx <= endIdx);
+        shootsToAnalyze = shootsToAnalyze.filter(invoice => {
+          const { month, year } = getMonthYear(invoice);
+          const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+          return relevantMonths.includes(monthKey);
+        });
+      }
+    }
+    
+    // Calculate category totals based on the shoot's approved amount, distributed by equipment
+    shootsToAnalyze.forEach(invoice => {
+      const shootTotal = parseAmount(invoice); // This is what the chart uses
+      
+      if (invoice.equipment && Array.isArray(invoice.equipment) && invoice.equipment.length > 0) {
+        // Calculate raw equipment total to get proportions
+        let equipmentRawTotal = 0;
+        const equipmentItems: { category: string; rawCost: number; qty: number }[] = [];
+        
+        invoice.equipment.forEach((eq: any) => {
+          const category = inferCategory(eq.name || eq.itemName || '', eq.category);
+          const qty = eq.quantity || eq.qty || 1;
+          const rate = eq.vendorRate || eq.dailyRate || eq.rate || eq.price || eq.rentalCost || eq.cost || 0;
+          const days = eq.days || eq.rentalDays || 1;
+          const rawCost = eq.total || eq.totalCost || (Number(qty) * Number(rate) * Number(days));
+          
+          equipmentRawTotal += Number(rawCost);
+          equipmentItems.push({ category, rawCost: Number(rawCost), qty: Number(qty) });
+        });
+        
+        // Distribute the approved amount proportionally across categories
+        if (equipmentRawTotal > 0) {
+          equipmentItems.forEach(item => {
+            const proportion = item.rawCost / equipmentRawTotal;
+            const allocatedAmount = shootTotal * proportion;
+            
+            if (!categoryTotals[item.category]) {
+              categoryTotals[item.category] = { value: 0, count: 0 };
+            }
+            categoryTotals[item.category].value += allocatedAmount;
+            categoryTotals[item.category].count += item.qty;
+          });
+        }
+      } else {
+        // No equipment breakdown - put in "Other"
+        if (!categoryTotals['Other']) {
+          categoryTotals['Other'] = { value: 0, count: 0 };
+        }
+        categoryTotals['Other'].value += shootTotal;
+        categoryTotals['Other'].count += 1;
+      }
+    });
+    
+    // Convert to array and sort by value
+    const data = Object.entries(categoryTotals)
+      .map(([name, { value, count }]) => ({ name, value: Math.round(Number(value)), count }))
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+    
+    // Calculate total for percentages
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    
+    return data.map(item => ({
+      ...item,
+      percentage: total > 0 ? Math.round((item.value / total) * 100) : 0
+    }));
+  }, [invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
+
+  // Detailed category items for drill-down view
+  const categoryDetailedItems = useMemo(() => {
+    const categoryItems: { [key: string]: { name: string; shootName: string; qty: number; rate: number; days: number; total: number }[] } = {};
+    
+    // Use the same filtering logic as categorySpendingData
+    let shootsToAnalyze = [...invoiceData];
+    
+    if (chartView === 'daily' && selectedStartDate && selectedEndDate) {
+      const startDate = new Date(selectedStartDate);
+      const endDate = new Date(selectedEndDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      shootsToAnalyze = shootsToAnalyze.filter(invoice => {
+        const shootDate = getShootDateObj(invoice);
+        return shootDate && shootDate >= startDate && shootDate <= endDate;
+      });
+    }
+    
+    if (chartView === 'monthly' && (selectedMonthStart || selectedMonthEnd)) {
+      const startIdx = selectedMonthStart ? monthOrder.indexOf(selectedMonthStart) : 0;
+      const endIdx = selectedMonthEnd ? monthOrder.indexOf(selectedMonthEnd) : monthOrder.length - 1;
+      
+      if (startIdx !== -1 && endIdx !== -1) {
+        const relevantMonths = monthOrder.filter((_, idx) => idx >= startIdx && idx <= endIdx);
+        shootsToAnalyze = shootsToAnalyze.filter(invoice => {
+          const { month, year } = getMonthYear(invoice);
+          const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+          return relevantMonths.includes(monthKey);
+        });
+      }
+    }
+    
+    shootsToAnalyze.forEach(invoice => {
+      const shootName = invoice.name || invoice.title || 'Unknown Shoot';
+      
+      if (invoice.equipment && Array.isArray(invoice.equipment)) {
+        invoice.equipment.forEach((eq: any) => {
+          const category = inferCategory(eq.name || eq.itemName || '', eq.category);
+          const itemName = eq.name || eq.itemName || 'Unknown Item';
+          const qty = eq.quantity || eq.qty || 1;
+          const rate = eq.vendorRate || eq.dailyRate || eq.rate || eq.price || eq.rentalCost || eq.cost || 0;
+          const days = eq.days || eq.rentalDays || 1;
+          const total = eq.total || eq.totalCost || (Number(qty) * Number(rate) * Number(days));
+          
+          if (!categoryItems[category]) {
+            categoryItems[category] = [];
+          }
+          categoryItems[category].push({
+            name: itemName,
+            shootName,
+            qty: Number(qty),
+            rate: Number(rate),
+            days: Number(days),
+            total: Number(total)
+          });
+        });
+      }
+    });
+    
+    return categoryItems;
+  }, [invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
+
+  // Colors for pie chart
+  const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
 
   // Custom tooltip for chart
   const CustomTooltip = ({ active, payload }: any) => {
@@ -736,6 +953,96 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 )}
               </div>
 
+              {/* Category Spending Pie Chart */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mt-6" style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Spending by Category</h3>
+                    <p className="text-sm text-gray-500">
+                      Equipment breakdown • {chartView === 'daily' && selectedStartDate && selectedEndDate 
+                        ? `${new Date(selectedStartDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - ${new Date(selectedEndDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : selectedMonthStart || selectedMonthEnd
+                          ? `${selectedMonthStart ? formatMonthKey(selectedMonthStart) : 'Start'} - ${selectedMonthEnd ? formatMonthKey(selectedMonthEnd) : 'End'}`
+                          : `All ${invoiceData.length} shoots`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-400">Total</div>
+                    <div className="text-lg font-bold" style={{ color: '#27AE60' }}>
+                      ₹{categorySpendingData.reduce((sum, d) => sum + d.value, 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                
+                {categorySpendingData.length > 0 ? (
+                  <div className="flex items-start gap-10">
+                    {/* Pie Chart - Bigger */}
+                    <div style={{ width: 450, height: 450, flexShrink: 0 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categorySpendingData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={100}
+                            outerRadius={170}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ percentage }) => `${percentage}%`}
+                            labelLine={false}
+                          >
+                            {categorySpendingData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(value: number) => [`₹${value.toLocaleString()}`, '']}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Legend with Count - Clickable */}
+                    <div className="flex-1 grid grid-cols-2 gap-3 pt-4">
+                      {categorySpendingData.map((item, index) => (
+                        <div 
+                          key={item.name} 
+                          className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer hover:shadow-md"
+                          onClick={() => setSelectedCategory(item.name)}
+                        >
+                          <div 
+                            className="w-5 h-5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-900 truncate">{item.name}</span>
+                              <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-full">
+                                {item.count} {item.count === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-lg font-bold" style={{ color: PIE_COLORS[index % PIE_COLORS.length] }}>
+                                {item.percentage}%
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                ₹{item.value.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-xs text-blue-500 mt-1">Click to view items →</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-40 flex items-center justify-center text-gray-400">
+                    No category data available. Equipment items need categories assigned.
+                  </div>
+                )}
+              </div>
+
               {/* Monthly Summary Cards */}
               <div className="grid grid-cols-3 gap-4">
                 {monthOrder.slice(-6).map(monthKey => {
@@ -1043,6 +1350,92 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Details Modal */}
+      {selectedCategory && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedCategory(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl flex flex-col" 
+            style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '800px', maxHeight: '80vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-5 h-5 rounded-full"
+                  style={{ backgroundColor: PIE_COLORS[categorySpendingData.findIndex(c => c.name === selectedCategory) % PIE_COLORS.length] }}
+                />
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">{selectedCategory}</h2>
+                  <p className="text-sm text-gray-500">
+                    {categoryDetailedItems[selectedCategory]?.length || 0} equipment items
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedCategory(null)} 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6" style={{ minHeight: 0 }}>
+              {categoryDetailedItems[selectedCategory] && categoryDetailedItems[selectedCategory].length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="text-left text-gray-500 text-xs bg-gray-50">
+                      <th className="py-3 px-4 font-medium rounded-tl-lg">Equipment Name</th>
+                      <th className="py-3 px-4 font-medium">Shoot</th>
+                      <th className="py-3 px-4 font-medium text-center">Qty</th>
+                      <th className="py-3 px-4 font-medium text-right">Rate</th>
+                      <th className="py-3 px-4 font-medium text-center">Days</th>
+                      <th className="py-3 px-4 font-medium text-right rounded-tr-lg">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryDetailedItems[selectedCategory].map((item, idx) => (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 font-medium text-gray-900">{item.name}</td>
+                        <td className="py-3 px-4 text-gray-600 max-w-[150px] truncate" title={item.shootName}>{item.shootName}</td>
+                        <td className="py-3 px-4 text-center text-gray-600">{item.qty}</td>
+                        <td className="py-3 px-4 text-right text-gray-600">₹{item.rate.toLocaleString()}</td>
+                        <td className="py-3 px-4 text-center text-gray-600">{item.days}</td>
+                        <td className="py-3 px-4 text-right font-semibold text-gray-900">₹{item.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No items found in this category</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Total ({categoryDetailedItems[selectedCategory]?.length || 0} items)
+                </div>
+                <div className="text-xl font-bold" style={{ color: '#27AE60' }}>
+                  ₹{(categoryDetailedItems[selectedCategory]?.reduce((sum, item) => sum + item.total, 0) || 0).toLocaleString()}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="w-full py-3 mt-3 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

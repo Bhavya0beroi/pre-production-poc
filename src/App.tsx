@@ -627,27 +627,36 @@ function AppContent() {
         }
 
         // Try to load catalog from API
-        const catalogResponse = await fetch(`${API_URL}/api/catalog`, {
-          signal: AbortSignal.timeout(5000)
-        });
-        if (catalogResponse.ok) {
-          const catalogData = await catalogResponse.json();
-          const apiCatalog: CatalogItem[] = (catalogData || []).map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            dailyRate: parseFloat(c.daily_rate),
-            category: c.category,
-            lastUpdated: c.last_updated,
-          }));
-          
-          // Merge API data with defaults - API items take precedence, but keep defaults if not in API
-          const apiIds = new Set(apiCatalog.map(c => c.id));
-          const mergedCatalog = [
-            ...apiCatalog,
-            ...defaultCatalogItems.filter(d => !apiIds.has(d.id))
-          ];
-          setCatalogItems(mergedCatalog);
-          console.log('Loaded', apiCatalog.length, 'catalog items from API, merged with', defaultCatalogItems.length, 'defaults, total:', mergedCatalog.length);
+        try {
+          const catalogResponse = await fetch(`${API_URL}/api/catalog`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (catalogResponse.ok) {
+            const catalogData = await catalogResponse.json();
+            const apiCatalog: CatalogItem[] = (catalogData || []).map((c: any) => ({
+              id: String(c.id), // Ensure ID is string
+              name: c.name,
+              dailyRate: parseFloat(c.daily_rate) || 0,
+              category: c.category,
+              lastUpdated: c.last_updated,
+            }));
+            
+            // Merge API data with defaults - API items take precedence, but keep defaults if not in API
+            const apiIds = new Set(apiCatalog.map(c => String(c.id)));
+            const mergedCatalog = [
+              ...defaultCatalogItems.filter(d => !apiIds.has(String(d.id))), // Defaults first
+              ...apiCatalog, // Then API items (including new ones)
+            ];
+            setCatalogItems(mergedCatalog);
+            console.log('Loaded', apiCatalog.length, 'catalog items from API, merged with', defaultCatalogItems.length, 'defaults, total:', mergedCatalog.length);
+          } else {
+            // API failed, use defaults
+            console.log('Catalog API returned error, using defaults');
+            setCatalogItems(defaultCatalogItems);
+          }
+        } catch (catalogError) {
+          console.log('Catalog fetch failed, using defaults:', catalogError);
+          setCatalogItems(defaultCatalogItems);
         }
       } catch (error) {
         console.log('API not available, using localStorage data');

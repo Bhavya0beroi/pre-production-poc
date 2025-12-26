@@ -17,7 +17,7 @@ interface ShootData {
 
 interface CreateRequestFormProps {
   onClose: () => void;
-  onSubmit: (requestData: any) => void;
+  onSubmit: (requestData: any) => void | Promise<void>;
   catalogItems: CatalogItem[];
   onAddCatalogItem?: (item: CatalogItem) => void;
 }
@@ -312,51 +312,57 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
     return `${monthNamesShort[date.month]} ${date.day}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Prevent double submission
     if (isSubmitting) return;
     setIsSubmitting(true);
     
-    // Generate a unique request group ID for multi-shoot requests
-    const requestGroupId = shoots.length > 1 ? `group-${Date.now()}` : undefined;
-    
-    // Submit all shoots as part of one request
-    const shootsData = shoots.map(shoot => {
-      const days = calculateDays(shoot);
-      return {
-        shootName: shoot.shootName,
-        location: shoot.location,
-        startDate: shoot.selectedStartDate ? `${shoot.selectedStartDate.year}-${String(shoot.selectedStartDate.month + 1).padStart(2, '0')}-${String(shoot.selectedStartDate.day).padStart(2, '0')}` : '',
-        endDate: shoot.selectedEndDate ? `${shoot.selectedEndDate.year}-${String(shoot.selectedEndDate.month + 1).padStart(2, '0')}-${String(shoot.selectedEndDate.day).padStart(2, '0')}` : '',
-        equipment: shoot.cart.map(item => ({ ...item, days, expectedRate: item.dailyRate })),
-        totalBudget: calculateShootTotal(shoot),
-      };
-    });
-
-    // Submit all shoots together
-    const allShootsData = shootsData.map((shootData, index) => ({
-      requestorName,
-      ...shootData,
-      shootName: shootData.shootName || `Shoot ${index + 1}`,
-      approvalEmail,
-      isMultiShoot: shoots.length > 1,
-      multiShootIndex: index,
-      totalShootsInRequest: shoots.length,
-      requestGroupId,
-    }));
-
-    // Pass all shoots as an array if multiple, or single object if one
-    if (shoots.length === 1) {
-      onSubmit(allShootsData[0]);
-    } else {
-      // Submit as array for batch processing
-      onSubmit({ 
-        isMultiShootBatch: true, 
-        shoots: allShootsData,
-        requestGroupId 
+    try {
+      // Generate a unique request group ID for multi-shoot requests
+      const requestGroupId = shoots.length > 1 ? `group-${Date.now()}` : undefined;
+      
+      // Submit all shoots as part of one request
+      const shootsData = shoots.map(shoot => {
+        const days = calculateDays(shoot);
+        return {
+          shootName: shoot.shootName,
+          location: shoot.location,
+          startDate: shoot.selectedStartDate ? `${shoot.selectedStartDate.year}-${String(shoot.selectedStartDate.month + 1).padStart(2, '0')}-${String(shoot.selectedStartDate.day).padStart(2, '0')}` : '',
+          endDate: shoot.selectedEndDate ? `${shoot.selectedEndDate.year}-${String(shoot.selectedEndDate.month + 1).padStart(2, '0')}-${String(shoot.selectedEndDate.day).padStart(2, '0')}` : '',
+          equipment: shoot.cart.map(item => ({ ...item, days, expectedRate: item.dailyRate })),
+          totalBudget: calculateShootTotal(shoot),
+        };
       });
+
+      // Submit all shoots together
+      const allShootsData = shootsData.map((shootData, index) => ({
+        requestorName,
+        ...shootData,
+        shootName: shootData.shootName || `Shoot ${index + 1}`,
+        approvalEmail,
+        isMultiShoot: shoots.length > 1,
+        multiShootIndex: index,
+        totalShootsInRequest: shoots.length,
+        requestGroupId,
+      }));
+
+      // Pass all shoots as an array if multiple, or single object if one
+      if (shoots.length === 1) {
+        await onSubmit(allShootsData[0]);
+      } else {
+        // Submit as array for batch processing
+        await onSubmit({ 
+          isMultiShootBatch: true, 
+          shoots: allShootsData,
+          requestGroupId 
+        });
+      }
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      // Reset submitting state on error so user can retry
+      setIsSubmitting(false);
     }
   };
 
