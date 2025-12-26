@@ -28,6 +28,9 @@ const API_URL = import.meta.env.VITE_API_URL ||
     ? 'http://localhost:3001' 
     : 'https://divine-nature-production-c49a.up.railway.app');
 
+// Log API URL for debugging
+console.log('API_URL:', API_URL, 'hostname:', typeof window !== 'undefined' ? window.location.hostname : 'SSR');
+
 export type ShootStatus = 
   | 'new_request' 
   | 'with_vendor' 
@@ -584,15 +587,18 @@ function AppContent() {
       }
 
       try {
-        console.log('Trying to load data from API...');
+        console.log('Trying to load data from API:', API_URL);
         
         // Try to load shoots from API
         const shootsResponse = await fetch(`${API_URL}/api/shoots`, { 
-          signal: AbortSignal.timeout(5000) // 5 second timeout
+          signal: AbortSignal.timeout(10000) // 10 second timeout
         });
+        
+        console.log('Shoots API response status:', shootsResponse.status);
         
         if (shootsResponse.ok) {
           const shootsData = await shootsResponse.json();
+          console.log('Shoots data received:', shootsData?.length, 'items');
           // Only use API data if we got a valid response
           if (Array.isArray(shootsData)) {
             const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
@@ -661,9 +667,11 @@ function AppContent() {
           setCatalogItems(defaultCatalogItems);
         }
       } catch (error) {
-        console.log('API not available, using localStorage data');
+        console.error('API not available, using localStorage data. Error:', error);
+        // Keep localStorage data as fallback
       } finally {
         setIsLoadingData(false);
+        console.log('Data loading complete. Shoots count:', shoots.length);
       }
     };
 
