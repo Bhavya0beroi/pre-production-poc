@@ -12,31 +12,24 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ============================================
-// EMAIL CONFIGURATION (Brevo SMTP)
+// EMAIL CONFIGURATION (Gmail SMTP)
 // ============================================
 
-// Brevo SMTP credentials
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
-const SMTP_PORT = process.env.SMTP_PORT || 587;
-const SMTP_USER = process.env.SMTP_USER || '9ecb80001@smtp-brevo.com';
-const SMTP_PASS = process.env.SMTP_PASS || 'lOaMyb2Bvfx80q1P';
-const SMTP_FROM = process.env.SMTP_FROM || 'bhavya.oberoi@learnapp.co'; // From email address
+// Gmail SMTP credentials - use app password
+const SMTP_USER = process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
+const SMTP_PASS = process.env.SMTP_PASS || 'xvtukcpvmsggcvb'; // Gmail app password (no spaces)
+const SMTP_FROM = process.env.SMTP_FROM || 'bhavya.oberoi@learnapp.co';
 
-// SMTP transporter setup for Brevo
+console.log('📧 Configuring Gmail SMTP...');
+console.log('   User:', SMTP_USER);
+
+// Gmail SMTP transporter
 const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: false, // TLS
+  service: 'gmail',
   auth: {
     user: SMTP_USER,
-    pass: SMTP_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 60000,
+    pass: SMTP_PASS.replace(/\s/g, '') // Remove any spaces from app password
+  }
 });
 
 // Verify email connection on startup
