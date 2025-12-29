@@ -362,6 +362,12 @@ function AppContent() {
           const result = await response.json();
           console.log(`✉️ Real email sent: ${emailType} to ${recipientEmail} - messageId: ${result.messageId}${threadMessageId ? ' (threaded)' : ''}`);
           
+          // Show the Email Sent Modal ONLY after successful send
+          setEmailSentModal(newEmail);
+          
+          // Add activity for successful email
+          addActivityToShoot(shootId, `Email: ${emailSubjects[emailType]}`, `Sent to ${recipientEmail}`, true);
+          
           // If this is the first email (new_request), store the messageId for threading
           // Also store it for ALL shoots in the request group
           if ((emailType === 'new_request' || emailType === 'new_request_multi') && result.messageId && !threadMessageId) {
@@ -395,18 +401,15 @@ function AppContent() {
             }
           }
         } else {
-          console.error(`❌ Email failed: ${emailType}`, await response.text());
+          const errorText = await response.text();
+          console.error(`❌ Email failed: ${emailType}`, errorText);
+          // Don't show modal on failure - email wasn't sent
         }
       } catch (error) {
         console.error(`❌ Email error: ${emailType}`, error);
+        // Don't show modal on error - email wasn't sent
       }
     }
-
-    // Show the Email Sent Modal
-    setEmailSentModal(newEmail);
-
-    // Add activity
-    addActivityToShoot(shootId, `Email: ${emailSubjects[emailType]}`, `Sent to ${recipientEmail}`, true);
   };
   
   // Equipment Catalog - default data
