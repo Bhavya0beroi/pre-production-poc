@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-// Note: Using Resend HTTP API instead of nodemailer (Railway blocks SMTP ports)
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -12,17 +11,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ============================================
-// EMAIL CONFIGURATION (Resend HTTP API - works on Railway!)
+// EMAIL CONFIGURATION (Resend HTTP API with workaround)
 // ============================================
 
-// Get Resend API key from environment (sign up at resend.com for free)
+// Verified email that can receive all notifications
+const VERIFIED_EMAIL = process.env.VERIFIED_EMAIL || 'bhavya.oberoi@learnapp.co';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gPwuFNvg_JEL3arzPU7QApcCZz7CW5xFu';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'onboarding@resend.dev'; // Use resend.dev for testing
+const EMAIL_FROM = 'onboarding@resend.dev';
 
 console.log('📧 Email Configuration:');
 console.log('   Using: Resend HTTP API');
-console.log('   API Key configured:', RESEND_API_KEY ? 'Yes' : 'No (emails will be logged only)');
-console.log('   From:', EMAIL_FROM);
+console.log('   Verified Email:', VERIFIED_EMAIL);
+console.log('   Note: All emails sent to verified email until domain is verified');
 
 // Generate a unique Message-ID for email threading
 function generateMessageId() {
@@ -31,45 +31,50 @@ function generateMessageId() {
   return `${timestamp}.${random}@shootflow.app`;
 }
 
-// Resend email sender using HTTP API (bypasses SMTP port blocking)
-// Supports email threading via custom Message-ID headers
-async function sendEmailViaResend(to, subject, html, threadOptions = {}) {
-  if (!RESEND_API_KEY) {
-    console.log('📧 [DEMO MODE] Email would be sent:');
-    console.log('   To:', to);
-    console.log('   Subject:', subject);
-    return { messageId: `demo-${Date.now()}`, demo: true };
-  }
-
+// Send email via Resend - all emails go to verified email with intended recipient shown
+async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
   try {
-    // Build email payload
+    let messageId = '';
+    
+    if (threadOptions.threadId) {
+      console.log('📧 Threading reply to:', threadOptions.threadId);
+    } else {
+      messageId = generateMessageId();
+      threadOptions._generatedMessageId = messageId;
+      console.log('📧 Creating new thread with Message-ID:', messageId);
+    }
+
+    // Add a banner showing the intended recipient
+    const emailWithBanner = `
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px 20px; margin-bottom: 20px; border-radius: 8px;">
+        <p style="margin: 0; color: white; font-size: 14px;">
+          <strong>📧 INTENDED RECIPIENT:</strong> ${to}
+        </p>
+        <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">
+          Please forward this email to the recipient above, or verify your domain on Resend to enable direct sending.
+        </p>
+      </div>
+      ${html}
+    `;
+    
+    // Build email payload - always send to verified email
     const emailPayload = {
       from: `ShootFlow <${EMAIL_FROM}>`,
-      to: to,
-      subject: subject,
-      html: html,
-      headers: {}
+      to: VERIFIED_EMAIL,
+      subject: `[For: ${to}] ${subject}`,
+      html: emailWithBanner
     };
 
+    // Add threading headers
     if (threadOptions.threadId) {
-      // This is a REPLY - add threading headers to link to parent
-      // Gmail threads based on: In-Reply-To + References + similar subject
-      const parentMessageId = `<${threadOptions.threadId}>`;
       emailPayload.headers = {
-        'In-Reply-To': parentMessageId,
-        'References': parentMessageId
+        'In-Reply-To': `<${threadOptions.threadId}>`,
+        'References': `<${threadOptions.threadId}>`
       };
-      console.log('📧 Threading reply to:', parentMessageId);
-    } else {
-      // This is the FIRST email - set a custom Message-ID we can reference later
-      const customMessageId = generateMessageId();
+    } else if (messageId) {
       emailPayload.headers = {
-        'Message-ID': `<${customMessageId}>`
+        'Message-ID': `<${messageId}>`
       };
-      console.log('📧 Creating new thread with Message-ID:', customMessageId);
-      
-      // Store this so we return it for future threading
-      threadOptions._generatedMessageId = customMessageId;
     }
 
     const response = await fetch('https://api.resend.com/emails', {
@@ -88,39 +93,16 @@ async function sendEmailViaResend(to, subject, html, threadOptions = {}) {
       throw new Error(data.message || 'Failed to send email');
     }
 
-    // Return our custom Message-ID for first email, or Resend's ID for replies
     const returnMessageId = threadOptions._generatedMessageId || data.id;
-    console.log('✅ Email sent via Resend:', data.id, '| Thread ID:', returnMessageId);
-    return { messageId: returnMessageId, resendId: data.id };
+    console.log('✅ Email sent:', data.id, '| Intended for:', to, '| Delivered to:', VERIFIED_EMAIL);
+    return { messageId: returnMessageId, apiId: data.id };
   } catch (error) {
-    console.error('❌ Resend email failed:', error.message);
+    console.error('❌ Email failed:', error.message);
     throw error;
   }
 }
 
-// Transporter-like interface for compatibility with existing code
-const transporter = {
-  verify: (callback) => {
-    if (RESEND_API_KEY) {
-      console.log('✅ Resend API configured and ready');
-    } else {
-      console.log('⚠️ Resend API key not set - emails will be logged only (demo mode)');
-    }
-    callback(null, true);
-  },
-  sendMail: async (options) => {
-    return sendEmailViaResend(options.to, options.subject, options.html, options.threadOptions || {});
-  }
-};
-
-// Verify email connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.log('❌ Email setup failed:', error.message);
-  } else {
-    console.log('✅ Resend email API is ready');
-  }
-});
+console.log('✅ Email service ready');
 
 // Helper function to format equipment list with owner and price
 const formatEquipmentList = (equipment) => {
@@ -618,21 +600,13 @@ async function sendEmail(to, template, shoot, threadMessageId = null) {
     const emailContent = emailTemplates[template](shoot);
     
     // For Gmail threading: use IDENTICAL subject line for all emails in thread
-    // Gmail threads by: In-Reply-To header + References header + SAME subject
     const shootName = shoot.name || 'Shoot Request';
-    
-    // ALL emails use the SAME subject (critical for Gmail threading!)
-    // The step info will be in the email body, not subject
     const subject = `ShootFlow: ${shootName}`;
     
-    const mailOptions = {
-      to: to,
-      subject: subject,
-      html: emailContent.html,
-      threadOptions: threadMessageId ? { threadId: threadMessageId } : {}
-    };
+    // Use Gmail SMTP to send email
+    const threadOptions = threadMessageId ? { threadId: threadMessageId } : {};
+    const info = await sendEmailViaSMTP(to, subject, emailContent.html, threadOptions);
     
-    const info = await transporter.sendMail(mailOptions);
     console.log(`✉️ Email sent: ${template} to ${to} - ${info.messageId}${threadMessageId ? ' (threaded)' : ' (new thread)'}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
