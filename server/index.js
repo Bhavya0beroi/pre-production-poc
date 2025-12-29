@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -11,98 +12,82 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ============================================
-// EMAIL CONFIGURATION (Resend HTTP API with workaround)
+// EMAIL CONFIGURATION (Gmail SMTP)
 // ============================================
 
-// Verified email that can receive all notifications
-const VERIFIED_EMAIL = process.env.VERIFIED_EMAIL || 'bhavya.oberoi@learnapp.co';
-const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gPwuFNvg_JEL3arzPU7QApcCZz7CW5xFu';
-const EMAIL_FROM = 'onboarding@resend.dev';
+// Gmail SMTP credentials
+const GMAIL_USER = process.env.GMAIL_USER || 'Bhavya.oberoi@learnapp.co';
+const GMAIL_PASS = process.env.GMAIL_PASS || 'xvtu kcpv mgsg gcvb';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Bhavya.oberoi@learnapp.co';
 
 console.log('📧 Email Configuration:');
-console.log('   Using: Resend HTTP API');
-console.log('   Verified Email:', VERIFIED_EMAIL);
-console.log('   Note: All emails sent to verified email until domain is verified');
+console.log('   Using: Gmail SMTP');
+console.log('   User:', GMAIL_USER);
+console.log('   From:', EMAIL_FROM);
+
+// Create Gmail transporter using 'gmail' service
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: GMAIL_USER,
+    pass: GMAIL_PASS
+  }
+});
+
+// Verify connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.log('⚠️ Gmail SMTP verification failed:', error.message);
+    console.log('   Will attempt to send emails anyway...');
+  } else {
+    console.log('✅ Gmail SMTP ready - can send to ANY email!');
+  }
+});
 
 // Generate a unique Message-ID for email threading
 function generateMessageId() {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 15);
-  return `${timestamp}.${random}@shootflow.app`;
+  return `${timestamp}.${random}@learnapp.co`;
 }
 
-// Send email via Resend - all emails go to verified email with intended recipient shown
+// Send email via Gmail SMTP
 async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
   try {
     let messageId = '';
     
+    const mailOptions = {
+      from: `ShootFlow <${EMAIL_FROM}>`,
+      to: to,
+      subject: subject,
+      html: html
+    };
+
     if (threadOptions.threadId) {
+      // Threading - reply to existing thread
+      mailOptions.inReplyTo = `<${threadOptions.threadId}>`;
+      mailOptions.references = `<${threadOptions.threadId}>`;
       console.log('📧 Threading reply to:', threadOptions.threadId);
     } else {
+      // New thread - create custom message ID
       messageId = generateMessageId();
+      mailOptions.messageId = `<${messageId}>`;
       threadOptions._generatedMessageId = messageId;
       console.log('📧 Creating new thread with Message-ID:', messageId);
     }
 
-    // Add a banner showing the intended recipient
-    const emailWithBanner = `
-      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px 20px; margin-bottom: 20px; border-radius: 8px;">
-        <p style="margin: 0; color: white; font-size: 14px;">
-          <strong>📧 INTENDED RECIPIENT:</strong> ${to}
-        </p>
-        <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">
-          Please forward this email to the recipient above, or verify your domain on Resend to enable direct sending.
-        </p>
-      </div>
-      ${html}
-    `;
+    const info = await transporter.sendMail(mailOptions);
     
-    // Build email payload - always send to verified email
-    const emailPayload = {
-      from: `ShootFlow <${EMAIL_FROM}>`,
-      to: VERIFIED_EMAIL,
-      subject: `[For: ${to}] ${subject}`,
-      html: emailWithBanner
-    };
-
-    // Add threading headers
-    if (threadOptions.threadId) {
-      emailPayload.headers = {
-        'In-Reply-To': `<${threadOptions.threadId}>`,
-        'References': `<${threadOptions.threadId}>`
-      };
-    } else if (messageId) {
-      emailPayload.headers = {
-        'Message-ID': `<${messageId}>`
-      };
-    }
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(emailPayload)
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('❌ Resend API error:', data);
-      throw new Error(data.message || 'Failed to send email');
-    }
-
-    const returnMessageId = threadOptions._generatedMessageId || data.id;
-    console.log('✅ Email sent:', data.id, '| Intended for:', to, '| Delivered to:', VERIFIED_EMAIL);
-    return { messageId: returnMessageId, apiId: data.id };
+    const returnMessageId = threadOptions._generatedMessageId || info.messageId;
+    console.log('✅ Email sent via Gmail:', info.messageId, '| To:', to);
+    return { messageId: returnMessageId, gmailId: info.messageId };
   } catch (error) {
-    console.error('❌ Email failed:', error.message);
+    console.error('❌ Gmail SMTP failed:', error.message);
     throw error;
   }
 }
 
-console.log('✅ Email service ready');
+console.log('✅ Email service initialized');
 
 // Helper function to format equipment list with owner and price
 const formatEquipmentList = (equipment) => {
