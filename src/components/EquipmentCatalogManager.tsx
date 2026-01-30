@@ -101,9 +101,42 @@ export function EquipmentCatalogManager({
     }
   };
 
-  const handleDeleteItem = (id: string) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      onUpdateCatalog(catalogItems.filter(item => item.id !== id));
+  const handleDeleteItem = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+    
+    // Optimistic update - remove from UI immediately
+    const updatedItems = catalogItems.filter(item => item.id !== id);
+    onUpdateCatalog(updatedItems);
+    
+    // Delete from database
+    const API_URL = import.meta.env.VITE_API_URL;
+    if (!API_URL) {
+      console.warn('No API URL configured, delete only applied locally');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_URL}/api/catalog/${id}`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(5000),
+      });
+      
+      if (response.ok) {
+        console.log('✅ Item deleted from database:', id);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Delete failed:', response.status, errorText);
+        alert(`Failed to delete item from database: ${errorText}. Please refresh the page.`);
+        // Revert the optimistic update by refetching
+        window.location.reload();
+      }
+    } catch (error: any) {
+      console.error('❌ Delete error:', error);
+      alert(`Failed to delete item from database: ${error.message}. Please refresh the page.`);
+      // Revert the optimistic update by refetching
+      window.location.reload();
     }
   };
 

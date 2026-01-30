@@ -1041,6 +1041,42 @@ app.post('/api/catalog/bulk', async (req, res) => {
   }
 });
 
+// Delete catalog item
+app.delete('/api/catalog/:id', async (req, res) => {
+  // Check if database is configured
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ DELETE /api/catalog/:id - Failed: DATABASE_URL not configured');
+    return res.status(503).json({ 
+      error: 'Database not configured', 
+      details: 'DATABASE_URL environment variable is not set. Please add a PostgreSQL database in Railway.'
+    });
+  }
+
+  try {
+    const { id } = req.params;
+    console.log('DELETE /api/catalog/:id - Deleting item:', id);
+    
+    const result = await pool.query(
+      'DELETE FROM catalog_items WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    if (result.rowCount === 0) {
+      console.log('⚠️  DELETE /api/catalog/:id - Item not found:', id);
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    
+    console.log('✅ DELETE /api/catalog/:id - Deleted item successfully:', id);
+    res.json({ success: true, deleted: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Error deleting catalog item:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to delete catalog item',
+      details: error.message
+    });
+  }
+});
+
 // ============================================
 // EMAIL API ENDPOINTS
 // ============================================
