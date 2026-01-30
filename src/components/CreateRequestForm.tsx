@@ -1240,13 +1240,9 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                 disabled={!newEquipment.name.trim() || newEquipment.dailyRate <= 0 || (newEquipment.category === 'Other' && !newEquipment.customCategory.trim())}
                 className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add to Cart & Catalog
+                Add Equipment
               </button>
             </div>
-            
-            <p className="text-xs text-gray-500 mt-3 text-center">
-              This equipment will be added to the catalog for future use
-            </p>
           </div>
         </div>
       )}
