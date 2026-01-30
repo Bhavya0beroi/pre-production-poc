@@ -1000,22 +1000,40 @@ app.post('/api/catalog/bulk', async (req, res) => {
     const items = req.body;
     console.log('POST /api/catalog/bulk - Saving', items.length, 'items');
     
-    for (const item of items) {
-      await pool.query(`
-        INSERT INTO catalog_items (id, name, daily_rate, category, last_updated)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          daily_rate = EXCLUDED.daily_rate,
-          category = EXCLUDED.category,
-          last_updated = EXCLUDED.last_updated
-      `, [item.id, item.name, item.daily_rate, item.category, item.last_updated]);
+    // Use a transaction to ensure all items save or none do
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      for (const item of items) {
+        // Validate item data
+        if (!item.id || !item.name || item.daily_rate == null || !item.category) {
+          throw new Error(`Invalid item data: ${JSON.stringify(item)}`);
+        }
+        
+        await client.query(`
+          INSERT INTO catalog_items (id, name, daily_rate, category, last_updated)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            daily_rate = EXCLUDED.daily_rate,
+            category = EXCLUDED.category,
+            last_updated = EXCLUDED.last_updated
+        `, [item.id, item.name, parseFloat(item.daily_rate), item.category, item.last_updated]);
+      }
+      
+      await client.query('COMMIT');
+      console.log('✅ POST /api/catalog/bulk - Saved', items.length, 'items successfully');
+      res.json({ success: true, count: items.length });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    
-    console.log('✅ POST /api/catalog/bulk - Saved', items.length, 'items successfully');
-    res.json({ success: true, count: items.length });
   } catch (error) {
     console.error('❌ Error bulk saving catalog:', error.message);
+    console.error('   Error details:', error.stack);
     res.status(500).json({ 
       error: 'Failed to save catalog items',
       details: error.message

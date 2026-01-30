@@ -796,36 +796,68 @@ function AppContent() {
     }
 
     try {
-      console.log('Persisting catalog changes to API... (' + updatedItems.length + ' items)');
+      console.log('📊 Persisting catalog changes to API... (' + updatedItems.length + ' items)');
+      console.log('🔍 Sample item:', updatedItems[updatedItems.length - 1]); // Log last item (likely the new one)
       
-      // Convert to database format
-      const dbItems = updatedItems.map(item => ({
-        id: item.id,
-        name: item.name,
-        daily_rate: item.dailyRate,
-        category: item.category,
-        last_updated: new Date().toISOString(),
-      }));
+      // Convert to database format with validation
+      const dbItems = updatedItems.map(item => {
+        // Ensure all required fields are present
+        if (!item.id || !item.name || item.dailyRate == null || !item.category) {
+          console.error('❌ Invalid item:', item);
+          throw new Error(`Invalid catalog item: missing required fields`);
+        }
+        
+        return {
+          id: String(item.id),
+          name: String(item.name),
+          daily_rate: Number(item.dailyRate),
+          category: String(item.category),
+          last_updated: new Date().toISOString(),
+        };
+      });
 
-      // Use bulk endpoint for efficiency
+      console.log('📤 Sending', dbItems.length, 'items to API');
+
+      // Use bulk endpoint for efficiency with increased timeout
       const response = await fetch(`${API_URL}/api/catalog/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dbItems),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(30000), // Increased to 30 seconds for large catalogs
       });
 
       if (response.ok) {
         const result = await response.json();
         console.log('✅ Catalog saved to database:', result.count, 'items');
+        addNotification({
+          type: 'success',
+          title: 'Catalog Updated',
+          message: `Successfully saved ${result.count} items to database`,
+          shootId: '',
+          shootName: 'Catalog',
+        });
       } else {
         const errorText = await response.text();
         console.error('❌ Catalog save failed:', response.status, errorText);
-        // Don't throw error - local changes are still saved
+        addNotification({
+          type: 'error',
+          title: 'Catalog Save Failed',
+          message: `Failed to save catalog: ${errorText}`,
+          shootId: '',
+          shootName: 'Catalog',
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Catalog save error:', error);
-      // Don't throw error - local changes are still saved
+      console.error('   Error message:', error.message);
+      console.error('   Stack:', error.stack);
+      addNotification({
+        type: 'error',
+        title: 'Catalog Save Error',
+        message: `Error saving catalog: ${error.message}`,
+        shootId: '',
+        shootName: 'Catalog',
+      });
     }
   };
 
