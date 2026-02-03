@@ -765,6 +765,18 @@ async function initDatabase() {
       )
     `);
 
+    // Run migrations to add any missing columns (for existing databases)
+    console.log('🔄 Running database migrations...');
+    try {
+      // Add call_time column if it doesn't exist (for databases created before this feature)
+      await pool.query(`
+        ALTER TABLE shoots ADD COLUMN IF NOT EXISTS call_time TEXT
+      `);
+      console.log('✅ Migration: call_time column verified');
+    } catch (migrationError) {
+      console.log('⚠️  Migration warning (can be ignored if column exists):', migrationError.message);
+    }
+
     // Check if we have any data
     const shootsCount = await pool.query('SELECT COUNT(*) FROM shoots');
     const catalogCount = await pool.query('SELECT COUNT(*) FROM catalog_items');
@@ -857,6 +869,12 @@ app.post('/api/shoots', async (req, res) => {
   try {
     const shoot = req.body;
     console.log('POST /api/shoots - Received:', shoot.id, 'status:', shoot.status);
+    
+    // Handle approval_email: convert array to JSON string if it's an array
+    const approvalEmailValue = Array.isArray(shoot.approval_email) 
+      ? JSON.stringify(shoot.approval_email) 
+      : shoot.approval_email;
+    
     const result = await pool.query(`
       INSERT INTO shoots (
         id, name, date, duration, location, call_time, equipment, status, requestor,
@@ -906,7 +924,7 @@ app.post('/api/shoots', async (req, res) => {
       JSON.stringify(shoot.invoice_file),
       shoot.paid,
       shoot.rejection_reason,
-      shoot.approval_email,
+      approvalEmailValue,
       shoot.cancellation_reason,
       JSON.stringify(shoot.activities || []),
       shoot.email_thread_id,

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS shoots (
   date TEXT,
   duration TEXT,
   location TEXT,
+  call_time TEXT,
   equipment JSONB DEFAULT '[]'::jsonb,
   status TEXT DEFAULT 'new_request',
   requestor JSONB,

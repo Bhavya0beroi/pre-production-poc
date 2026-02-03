@@ -678,33 +678,46 @@ function AppContent() {
         if (shootsResponse.ok) {
           const shootsData = await shootsResponse.json();
           if (Array.isArray(shootsData)) {
-            const formattedShoots: Shoot[] = shootsData.map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              date: s.date,
-              duration: s.duration,
-              location: s.location,
-              callTime: s.call_time,
-              equipment: s.equipment || [],
-              status: s.status,
-              requestor: s.requestor,
-              vendorQuote: s.vendor_quote,
-              approved: s.approved,
-              approvedAmount: s.approved_amount,
-              invoiceFile: s.invoice_file,
-              paid: s.paid,
-              rejectionReason: s.rejection_reason,
-              approvalEmail: s.approval_email,
-              cancellationReason: s.cancellation_reason,
-              activities: s.activities || [],
-              emailThreadId: s.email_thread_id,
-              createdAt: s.created_at ? new Date(s.created_at) : undefined,
-              shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
-              requestGroupId: s.request_group_id,
-              isMultiShoot: s.is_multi_shoot,
-              multiShootIndex: s.multi_shoot_index,
-              totalShootsInRequest: s.total_shoots_in_request,
-            }));
+            const formattedShoots: Shoot[] = shootsData.map((s: any) => {
+              // Parse approval_email: if it's a JSON string, parse it; otherwise use as-is
+              let approvalEmail = s.approval_email;
+              if (typeof approvalEmail === 'string' && approvalEmail.startsWith('[')) {
+                try {
+                  approvalEmail = JSON.parse(approvalEmail);
+                } catch (e) {
+                  // If parse fails, keep it as string
+                  console.warn('Failed to parse approval_email:', e);
+                }
+              }
+              
+              return {
+                id: s.id,
+                name: s.name,
+                date: s.date,
+                duration: s.duration,
+                location: s.location,
+                callTime: s.call_time,
+                equipment: s.equipment || [],
+                status: s.status,
+                requestor: s.requestor,
+                vendorQuote: s.vendor_quote,
+                approved: s.approved,
+                approvedAmount: s.approved_amount,
+                invoiceFile: s.invoice_file,
+                paid: s.paid,
+                rejectionReason: s.rejection_reason,
+                approvalEmail: approvalEmail,
+                cancellationReason: s.cancellation_reason,
+                activities: s.activities || [],
+                emailThreadId: s.email_thread_id,
+                createdAt: s.created_at ? new Date(s.created_at) : undefined,
+                shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
+                requestGroupId: s.request_group_id,
+                isMultiShoot: s.is_multi_shoot,
+                multiShootIndex: s.multi_shoot_index,
+                totalShootsInRequest: s.total_shoots_in_request,
+              };
+            });
             setShoots(formattedShoots);
             console.log('✅ Loaded', formattedShoots.length, 'shoots from API');
           }
