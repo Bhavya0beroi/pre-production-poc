@@ -24,6 +24,7 @@ interface ShootQuoteData {
   shootName: string;
   date: string;
   location: string;
+  callTime?: string;
   items: QuoteItem[];
   notes: string;
 }
@@ -69,6 +70,7 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
         shootName: s.name || `Shoot`,
         date: s.date || '',
         location: s.location || '',
+        callTime: s.callTime,
         items: s.equipment.map((eq, index) => ({
           id: eq.id || `item-${index}`,
           name: eq.name,
@@ -253,6 +255,12 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                 <div className="text-gray-900">{shoot.date}</div>
                 <div className="text-sm text-gray-600 mt-2 mb-1">Location</div>
                 <div className="text-gray-900">{shoot.location}</div>
+                {shoot.callTime && (
+                  <>
+                    <div className="text-sm text-gray-600 mt-2 mb-1">Call Time</div>
+                    <div className="text-gray-900">{shoot.callTime}</div>
+                  </>
+                )}
               </div>
             )}
 
@@ -301,6 +309,11 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                         <div className={`text-xs ${activeShootIndex === index ? 'text-blue-100' : 'text-gray-500'}`}>
                           {quote.date} • {quote.location}
                         </div>
+                        {quote.callTime && (
+                          <div className={`text-xs ${activeShootIndex === index ? 'text-blue-100' : 'text-gray-500'}`}>
+                            Call Time: {quote.callTime}
+                          </div>
+                        )}
                         <div className={`text-xs mt-1 ${activeShootIndex === index ? 'text-blue-100' : 'text-gray-400'}`}>
                           {quote.items.length} items
                         </div>
@@ -333,34 +346,39 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs text-gray-700">Item</th>
-                      <th className="px-3 py-2 text-center text-xs text-gray-700">Qty</th>
-                      <th className="px-3 py-2 text-right text-xs text-gray-700">Your Price</th>
+                      <th className="px-2 py-2 text-left text-xs text-gray-700 w-[35%] sm:w-auto">Item</th>
+                      <th className="px-2 py-2 text-center text-xs text-gray-700 w-[15%] sm:w-auto">Qty</th>
+                      <th className="px-2 py-2 text-right text-xs text-gray-700 w-[50%] sm:w-auto">Your Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {activeQuote?.items.map((item) => (
                       <tr key={item.id}>
-                        <td className="px-3 py-3">
-                          <div className="text-sm text-gray-900">{item.name}</div>
+                        <td className="px-2 py-3">
+                          <div className="text-xs sm:text-sm text-gray-900 break-words">{item.name}</div>
                           <div className="text-xs text-gray-500">{item.days} day(s)</div>
                         </td>
-                        <td className="px-3 py-3 text-center">
+                        <td className="px-2 py-3 text-center">
                           <span 
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium"
+                            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium"
                             style={{ backgroundColor: '#EFF6FF', color: '#2D60FF' }}
                           >
                             {item.quantity}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-3">
                           <input
                             type="number"
                             step="100"
                             min="0"
-                            value={item.vendorRate}
+                            value={item.vendorRate === 0 ? '' : item.vendorRate}
+                            onFocus={(e) => {
+                              if (item.vendorRate === 0) {
+                                e.target.value = '';
+                              }
+                            }}
                             onChange={(e) => updateItem(activeShootIndex, item.id, parseInt(e.target.value) || 0)}
-                            className="w-full px-3 py-2 border-2 border-blue-300 rounded text-right text-sm focus:outline-none focus:border-blue-500"
+                            className="w-full px-2 sm:px-3 py-2 border-2 border-blue-300 rounded text-right text-sm sm:text-base focus:outline-none focus:border-blue-500"
                             placeholder="₹0"
                           />
                         </td>

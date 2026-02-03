@@ -49,6 +49,7 @@ export interface Shoot {
   date: string;
   duration: string;
   location: string;
+  callTime?: string; // NEW: Call time for the shoot
   equipment: Equipment[];
   status: ShootStatus;
   requestor: {
@@ -69,7 +70,7 @@ export interface Shoot {
   };
   paid?: boolean;
   rejectionReason?: string;
-  approvalEmail?: string;
+  approvalEmail?: string | string[]; // UPDATED: Support multiple emails
   cancellationReason?: string;
   activities?: Activity[];
   emailThreadId?: string;
@@ -234,7 +235,45 @@ function AppContent() {
   // See src/services/emailService.ts for email functions
 
   // Trigger email via SMTP (real email) and add to UI notification thread
+  // Supports single email string or array of emails
   const triggerEmail = async (
+    shootId: string,
+    shootName: string,
+    emailType: 'new_request' | 'new_request_multi' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'rejected' | 'invoice_reminder' | 'invoice_uploaded' | 'payment_complete',
+    recipientEmail: string | string[],
+    additionalData?: {
+      dates?: string;
+      itemCount?: number;
+      estimatedBudget?: number;
+      quoteAmount?: number;
+      location?: string;
+      requestorName?: string;
+      equipmentList?: Array<{ name: string; dailyRate: number; quantity?: number }>;
+      shoot?: Shoot;
+      shoots?: any[]; // For multi-shoot requests
+    }
+  ) => {
+    // Convert single email to array for uniform processing
+    const recipients = Array.isArray(recipientEmail) ? recipientEmail : [recipientEmail];
+    
+    console.log('📧 triggerEmail called with:');
+    console.log('  - Recipients (raw):', recipientEmail);
+    console.log('  - Recipients (array):', recipients);
+    console.log('  - Email type:', emailType);
+    console.log('  - Shoot:', shootName);
+    
+    // Send email to all recipients SEPARATELY
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i];
+      console.log(`📤 Sending email ${i + 1}/${recipients.length} to:`, recipient);
+      await sendEmailToRecipient(shootId, shootName, emailType, recipient, additionalData);
+    }
+    
+    console.log(`✅ All ${recipients.length} emails sent successfully`);
+  };
+
+  // Helper function to send email to a single recipient
+  const sendEmailToRecipient = async (
     shootId: string,
     shootName: string,
     emailType: 'new_request' | 'new_request_multi' | 'sent_to_vendor' | 'quote_submitted' | 'approved' | 'rejected' | 'invoice_reminder' | 'invoice_uploaded' | 'payment_complete',
@@ -294,13 +333,17 @@ function AppContent() {
     };
 
     // For Gmail threading: ensure all emails in a request group have the same subject
-    // Use a consistent threadSubject based on requestGroupId or first shoot name
-    if (existingShootForData?.requestGroupId) {
+    // ONLY for multi-shoot requests (where shoots are intentionally grouped)
+    if (existingShootForData?.requestGroupId && existingShootForData?.isMultiShoot) {
       // Find all shoots in this request group to create a consistent subject
       const groupShoots = shoots.filter(s => s.requestGroupId === existingShootForData.requestGroupId);
       const firstShootInGroup = groupShoots.sort((a, b) => (a.multiShootIndex || 0) - (b.multiShootIndex || 0))[0];
       (shootData as any).threadSubject = firstShootInGroup?.name || shootName;
       (shootData as any).requestGroupId = existingShootForData.requestGroupId;
+      (shootData as any).isMultiShoot = true;
+      console.log(`📧 Multi-shoot threading: using subject "${firstShootInGroup?.name}" for group ${existingShootForData.requestGroupId}`);
+    } else {
+      console.log(`📧 Single shoot: using subject "${shootName}" (no grouping)`);
     }
 
     // For multi-shoot, add shoots array
@@ -347,14 +390,29 @@ function AppContent() {
         const existingShoot = shoots.find(s => s.id === shootId);
         let threadMessageId = existingShoot?.emailThreadId || null;
         
+        console.log(`\n🔍 EMAIL THREADING CHECK for ${emailType}:`);
+        console.log(`   Shoot ID: ${shootId}`);
+        console.log(`   Shoot Name: ${existingShoot?.name || 'NOT FOUND'}`);
+        console.log(`   Has emailThreadId: ${existingShoot?.emailThreadId ? 'YES - ' + existingShoot.emailThreadId : 'NO'}`);
+        console.log(`   Has requestGroupId: ${existingShoot?.requestGroupId ? 'YES - ' + existingShoot.requestGroupId : 'NO'}`);
+        console.log(`   Is Multi-Shoot: ${existingShoot?.isMultiShoot ? 'YES' : 'NO'}`);
+        
         // If no threadMessageId on this shoot, check other shoots in same request group
-        if (!threadMessageId && existingShoot?.requestGroupId) {
+        // ONLY for multi-shoot requests (where shoots are intentionally grouped)
+        if (!threadMessageId && existingShoot?.requestGroupId && existingShoot?.isMultiShoot) {
           const groupShoot = shoots.find(s => 
-            s.requestGroupId === existingShoot.requestGroupId && s.emailThreadId
+            s.requestGroupId === existingShoot.requestGroupId && 
+            s.emailThreadId &&
+            s.id !== shootId
           );
           threadMessageId = groupShoot?.emailThreadId || null;
-          console.log(`📧 Found thread ID from request group: ${threadMessageId}`);
+          console.log(`   Found thread from group: ${threadMessageId ? 'YES - ' + threadMessageId : 'NO'}`);
         }
+        
+        console.log(`   Final threadMessageId: ${threadMessageId || 'NONE - will create new thread'}\n`);
+        
+        console.log(`📮 Calling email API for recipient: ${recipientEmail}`);
+        console.log(`   Template: ${template}, ThreadID: ${threadMessageId || 'none'}`);
         
         const response = await fetch(`${API_URL}/api/email/send`, {
           method: 'POST',
@@ -378,20 +436,22 @@ function AppContent() {
           addActivityToShoot(shootId, `Email: ${emailSubjects[emailType]}`, `Sent to ${recipientEmail}`, true);
           
           // If this is the first email (new_request), store the messageId for threading
-          // Also store it for ALL shoots in the request group
+          // Also store it for ALL shoots in the request group (for multi-shoot requests only)
           if ((emailType === 'new_request' || emailType === 'new_request_multi') && result.messageId && !threadMessageId) {
             // Update the shoot with the email thread ID for future emails
             const shootToUpdate = shoots.find(s => s.id === shootId);
             if (shootToUpdate) {
               const requestGroupId = shootToUpdate.requestGroupId;
+              const isMultiShoot = shootToUpdate.isMultiShoot;
               
               // Update this shoot
               const updatedShoot = { ...shootToUpdate, emailThreadId: result.messageId };
               await saveShootToAPI(updatedShoot);
               
-              // Also update all related shoots in the same request group
-              if (requestGroupId) {
+              // Also update all related shoots in the same request group (ONLY for multi-shoot requests)
+              if (requestGroupId && isMultiShoot) {
                 const relatedShoots = shoots.filter(s => s.requestGroupId === requestGroupId && s.id !== shootId);
+                console.log(`📧 Multi-shoot request: updating ${relatedShoots.length} related shoots with thread ID`);
                 for (const related of relatedShoots) {
                   const updatedRelated = { ...related, emailThreadId: result.messageId };
                   await saveShootToAPI(updatedRelated);
@@ -402,10 +462,10 @@ function AppContent() {
                     ? { ...s, emailThreadId: result.messageId }
                     : s
                 ));
-                console.log(`📧 Stored email thread ID for request group ${requestGroupId}: ${result.messageId}`);
+                console.log(`✅ Stored email thread ID for multi-shoot request group ${requestGroupId}: ${result.messageId}`);
               } else {
                 setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-                console.log(`📧 Stored email thread ID for shoot ${shootId}: ${result.messageId}`);
+                console.log(`✅ Stored email thread ID for single shoot ${shootId} (${shootToUpdate.name}): ${result.messageId}`);
               }
             }
           }
@@ -624,6 +684,7 @@ function AppContent() {
               date: s.date,
               duration: s.duration,
               location: s.location,
+              callTime: s.call_time,
               equipment: s.equipment || [],
               status: s.status,
               requestor: s.requestor,
@@ -703,6 +764,7 @@ function AppContent() {
       date: shoot.date,
       duration: shoot.duration,
       location: shoot.location,
+      call_time: shoot.callTime,
       equipment: shoot.equipment,
       status: shoot.status,
       requestor: shoot.requestor,
@@ -1083,14 +1145,20 @@ function AppContent() {
       const firstSubmission = submissions[0];
       const recipientEmail = firstSubmission.shoot.approvalEmail || firstSubmission.shoot.requestor.email || DEFAULT_RECIPIENTS.approver;
       
-      // Find emailThreadId from any shoot in the request group
+      // Find emailThreadId from any shoot in the request group (only for multi-shoot requests)
       const requestGroupId = firstSubmission.shoot.requestGroupId;
+      const isMultiShoot = firstSubmission.shoot.isMultiShoot;
       let threadMessageId: string | null = null;
-      if (requestGroupId) {
+      
+      if (requestGroupId && isMultiShoot) {
+        // For multi-shoot requests, find thread ID from any shoot in the group
         const groupShoot = shoots.find(s => s.requestGroupId === requestGroupId && s.emailThreadId);
         threadMessageId = groupShoot?.emailThreadId || null;
+        console.log(`📧 Quote submission for multi-shoot group ${requestGroupId}, thread: ${threadMessageId || 'none'}`);
       } else {
+        // For single shoots, use only this shoot's thread ID
         threadMessageId = firstSubmission.shoot.emailThreadId || null;
+        console.log(`📧 Quote submission for single shoot ${firstSubmission.shootId}, thread: ${threadMessageId || 'none'}`);
       }
       
       // Calculate combined total
@@ -1313,6 +1381,7 @@ function AppContent() {
       date: `${new Date(shootData.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(shootData.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
       duration: shootData.equipment.length > 0 ? `${shootData.equipment[0].days} Days` : '1 Day',
       location: shootData.location,
+      callTime: shootData.callTime,
       equipment: shootData.equipment.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -1364,9 +1433,15 @@ function AppContent() {
         return [...newShoots, ...prev];
       });
 
-      // Save all shoots to Supabase
+      // Save all shoots to API
       for (const shoot of newShoots) {
-        await saveShootToAPI(shoot);
+        try {
+          await saveShootToAPI(shoot);
+          console.log('Successfully saved shoot to API:', shoot.id);
+        } catch (apiError) {
+          console.error('Failed to save shoot to API, continuing anyway:', shoot.id, apiError);
+          // Continue even if API fails
+        }
       }
       
       // Change view
@@ -1412,7 +1487,13 @@ function AppContent() {
     console.log('Creating single shoot:', newShoot.name, 'with groupId:', newShoot.requestGroupId, 'id:', newShoot.id);
     
     // Save to API first (await to ensure it completes)
-    await saveShootToAPI(newShoot);
+    try {
+      await saveShootToAPI(newShoot);
+      console.log('Successfully saved to API');
+    } catch (apiError) {
+      console.error('Failed to save to API, continuing anyway:', apiError);
+      // Continue with local state update even if API fails
+    }
     
     // Then update local state
     setShoots(prev => [...[newShoot], ...prev]);

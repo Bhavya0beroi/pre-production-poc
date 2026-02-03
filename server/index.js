@@ -85,21 +85,30 @@ async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
       }
 
       const returnMessageId = threadOptions._generatedMessageId || messageId;
-      console.log('✅ Email sent via SendGrid:', returnMessageId, '| To:', to);
+      console.log('✅ Email sent via SendGrid to:', to, '| MessageID:', returnMessageId);
       return { messageId: returnMessageId, method: 'sendgrid' };
       
     } catch (sendgridError) {
       console.log('⚠️ SendGrid failed:', sendgridError.message);
+      console.log('   Error details:', sendgridError);
       console.log('   Falling back to Resend API...');
     }
   } else {
-    console.log('⚠️ SendGrid not configured, using Resend...');
+    console.log('⚠️ SendGrid API key not found in environment variables');
+    console.log('   SENDGRID_API_KEY =', SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+    console.log('   Falling back to Resend API...');
   }
   
   // Fallback to Resend HTTP API
   try {
-    // For Resend free tier: send to verified email with intended recipient info
+    // ⚠️ WARNING: Resend free tier can only send to verified emails
+    // This fallback sends to a verified email with a banner showing intended recipient
     const VERIFIED_EMAIL = 'bhavya.oberoi@learnapp.co';
+    
+    console.log('⚠️ RESEND FALLBACK ACTIVE:');
+    console.log(`   Intended recipient: ${to}`);
+    console.log(`   Actually sending to: ${VERIFIED_EMAIL} (verified email)`);
+    console.log(`   To fix: Set SENDGRID_API_KEY environment variable`);
     
     // Add a banner showing the intended recipient (for free tier limitation)
     const emailWithBanner = `
@@ -108,7 +117,8 @@ async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
           <strong>📧 INTENDED RECIPIENT:</strong> ${to}
         </p>
         <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">
-          Configure SendGrid to send directly to this email.
+          ⚠️ This email was sent to you because SendGrid is not configured.
+          Set SENDGRID_API_KEY environment variable to send to actual recipients.
         </p>
       </div>
       ${html}
@@ -648,9 +658,13 @@ async function sendEmail(to, template, shoot, threadMessageId = null) {
     let subjectIdentifier = shoot.threadSubject || shoot.name || 'Shoot Request';
     
     // For multi-shoot requests, use a consistent identifier based on request group
-    if (shoot.requestGroupId) {
+    // ONLY if this is actually a multi-shoot request (isMultiShoot flag)
+    if (shoot.requestGroupId && shoot.isMultiShoot) {
       // Use the request group ID or first shoot name for consistent threading
       subjectIdentifier = shoot.threadSubject || `Request ${shoot.requestGroupId.substring(0, 8)}`;
+      console.log(`📧 Multi-shoot email: using subject identifier "${subjectIdentifier}" for group ${shoot.requestGroupId}`);
+    } else {
+      console.log(`📧 Single shoot email: using subject identifier "${subjectIdentifier}"`);
     }
     
     const subject = `ShootFlow: ${subjectIdentifier}`;
@@ -718,6 +732,7 @@ async function initDatabase() {
         date TEXT,
         duration TEXT,
         location TEXT,
+        call_time TEXT,
         equipment JSONB DEFAULT '[]'::jsonb,
         status TEXT DEFAULT 'new_request',
         requestor JSONB,
@@ -844,17 +859,18 @@ app.post('/api/shoots', async (req, res) => {
     console.log('POST /api/shoots - Received:', shoot.id, 'status:', shoot.status);
     const result = await pool.query(`
       INSERT INTO shoots (
-        id, name, date, duration, location, equipment, status, requestor,
+        id, name, date, duration, location, call_time, equipment, status, requestor,
         vendor_quote, approved, approved_amount, invoice_file, paid,
         rejection_reason, approval_email, cancellation_reason, activities,
         email_thread_id, created_at, shoot_date, request_group_id,
         is_multi_shoot, multi_shoot_index, total_shoots_in_request
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         date = EXCLUDED.date,
         duration = EXCLUDED.duration,
         location = EXCLUDED.location,
+        call_time = EXCLUDED.call_time,
         equipment = EXCLUDED.equipment,
         status = EXCLUDED.status,
         requestor = EXCLUDED.requestor,
@@ -880,6 +896,7 @@ app.post('/api/shoots', async (req, res) => {
       shoot.date,
       shoot.duration,
       shoot.location,
+      shoot.call_time,
       JSON.stringify(shoot.equipment || []),
       shoot.status,
       JSON.stringify(shoot.requestor),

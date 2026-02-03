@@ -10,6 +10,7 @@ interface ShootData {
   id: string;
   shootName: string;
   location: string;
+  callTime: string;
   selectedStartDate: { day: number; month: number; year: number } | null;
   selectedEndDate: { day: number; month: number; year: number } | null;
   cart: CartItem[];
@@ -31,7 +32,8 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
 
   // Shared fields
   const [requestorName, setRequestorName] = useState('');
-  const [approvalEmail, setApprovalEmail] = useState('');
+  const [approvalEmails, setApprovalEmails] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState('');
   
   // Add New Equipment Modal state
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
@@ -49,6 +51,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
       id: '1',
       shootName: '',
       location: '',
+      callTime: '',
       selectedStartDate: null,
       selectedEndDate: null,
       cart: []
@@ -65,6 +68,30 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   // Search and category states
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  
+  // Time input states
+  const [timeHour, setTimeHour] = useState('');
+  const [timeMinute, setTimeMinute] = useState('');
+  const [timePeriod, setTimePeriod] = useState<'AM' | 'PM'>('AM');
+
+  // Parse and populate time inputs when switching shoots
+  useEffect(() => {
+    const callTime = shoots[activeShootIndex].callTime;
+    if (callTime) {
+      const match = callTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (match) {
+        setTimeHour(match[1]);
+        setTimeMinute(match[2]);
+        setTimePeriod(match[3].toUpperCase() as 'AM' | 'PM');
+      }
+    } else {
+      // Clear time inputs if no call time
+      setTimeHour('');
+      setTimeMinute('');
+      setTimePeriod('AM');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeShootIndex]);
   
   // Prevent double submission
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,6 +114,30 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Update callTime when time inputs change (debounced to avoid loops)
+  useEffect(() => {
+    if (timeHour && timeMinute) {
+      const hour = parseInt(timeHour);
+      const minute = parseInt(timeMinute);
+      if (hour >= 1 && hour <= 12 && minute >= 0 && minute <= 59) {
+        const formattedTime = `${hour}:${minute.toString().padStart(2, '0')} ${timePeriod}`;
+        // Only update if different to avoid loops
+        const currentCallTime = shoots[activeShootIndex].callTime;
+        if (currentCallTime !== formattedTime) {
+          const timeoutId = setTimeout(() => {
+            setShoots(prevShoots => {
+              const updatedShoots = [...prevShoots];
+              updatedShoots[activeShootIndex].callTime = formattedTime;
+              return updatedShoots;
+            });
+          }, 100);
+          return () => clearTimeout(timeoutId);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeHour, timeMinute, timePeriod, activeShootIndex]);
 
   // Get current active shoot
   const activeShoot = shoots[activeShootIndex];
@@ -139,6 +190,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
       id: Date.now().toString(),
       shootName: '',
       location: '',
+      callTime: '',
       // Copy dates from first shoot - multi-shoots are for same day
       selectedStartDate: firstShoot.selectedStartDate ? { ...firstShoot.selectedStartDate } : null,
       selectedEndDate: firstShoot.selectedEndDate ? { ...firstShoot.selectedEndDate } : null,
@@ -328,12 +380,20 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
       // Generate a unique request group ID for multi-shoot requests
       const requestGroupId = shoots.length > 1 ? `group-${Date.now()}` : undefined;
       
+      // Use the approval emails array (already parsed as chips)
+      const parsedApprovalEmails = approvalEmails;
+      
+      console.log('📧 Form submission - Approval emails:', parsedApprovalEmails);
+      console.log('   Type:', Array.isArray(parsedApprovalEmails) ? 'Array' : 'String');
+      console.log('   Count:', parsedApprovalEmails.length);
+      
       // Submit all shoots as part of one request
       const shootsData = shoots.map(shoot => {
         const days = calculateDays(shoot);
         return {
           shootName: shoot.shootName,
           location: shoot.location,
+          callTime: shoot.callTime,
           startDate: shoot.selectedStartDate ? `${shoot.selectedStartDate.year}-${String(shoot.selectedStartDate.month + 1).padStart(2, '0')}-${String(shoot.selectedStartDate.day).padStart(2, '0')}` : '',
           endDate: shoot.selectedEndDate ? `${shoot.selectedEndDate.year}-${String(shoot.selectedEndDate.month + 1).padStart(2, '0')}-${String(shoot.selectedEndDate.day).padStart(2, '0')}` : '',
           equipment: shoot.cart.map(item => ({ ...item, days, expectedRate: item.dailyRate })),
@@ -346,7 +406,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
         requestorName,
         ...shootData,
         shootName: shootData.shootName || `Shoot ${index + 1}`,
-        approvalEmail,
+        approvalEmail: parsedApprovalEmails.length > 1 ? parsedApprovalEmails : parsedApprovalEmails[0],
         isMultiShoot: shoots.length > 1,
         multiShootIndex: index,
         totalShootsInRequest: shoots.length,
@@ -368,9 +428,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
       }
       
       console.log('Submission completed successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting request:', error);
-      alert('Error submitting request. Please try again.');
+      console.error('Error details:', error.message, error.stack);
+      alert(`Error submitting request: ${error.message || 'Unknown error'}. Please check console for details.`);
       // Reset submitting state on error so user can retry
       setIsSubmitting(false);
     }
@@ -470,13 +531,79 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
     return `${cart.length} Items Selected (${cart[0].name}, ${cart[1].name.split(' ')[0]}...)`;
   };
 
+  // Email chip management
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
+  const addEmailChip = (email: string) => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !approvalEmails.includes(trimmedEmail)) {
+      setApprovalEmails([...approvalEmails, trimmedEmail]);
+      setEmailInput('');
+    }
+  };
+
+  const removeEmailChip = (emailToRemove: string) => {
+    setApprovalEmails(approvalEmails.filter(email => email !== emailToRemove));
+  };
+
+  const handleEmailInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addEmailChip(emailInput);
+    } else if (e.key === 'Backspace' && emailInput === '' && approvalEmails.length > 0) {
+      // Remove last chip when backspace is pressed on empty input
+      removeEmailChip(approvalEmails[approvalEmails.length - 1]);
+    }
+  };
+
+  const handleEmailInputBlur = () => {
+    if (emailInput.trim()) {
+      addEmailChip(emailInput);
+    }
+  };
+
+  // Handle time input changes
+  const handleHourChange = (value: string) => {
+    const num = value.replace(/\D/g, '');
+    if (num === '' || (parseInt(num) >= 1 && parseInt(num) <= 12)) {
+      setTimeHour(num);
+    }
+  };
+
+  const handleMinuteChange = (value: string) => {
+    const num = value.replace(/\D/g, '');
+    if (num === '' || (parseInt(num) >= 0 && parseInt(num) <= 59)) {
+      setTimeMinute(num);
+    }
+  };
+
   // Check if form is valid
   const isFormValid = () => {
-    if (!requestorName || !approvalEmail) return false;
-    return shoots.every(shoot => 
-      shoot.shootName && shoot.location && shoot.cart.length > 0 && 
-      shoot.selectedStartDate && shoot.selectedEndDate
-    );
+    if (!requestorName) {
+      console.log('Validation failed: No requestor name');
+      return false;
+    }
+    if (approvalEmails.length === 0) {
+      console.log('Validation failed: No approval emails');
+      return false;
+    }
+    const allShootsValid = shoots.every(shoot => {
+      const isValid = shoot.shootName && shoot.location && shoot.cart.length > 0 && 
+        shoot.selectedStartDate && shoot.selectedEndDate;
+      if (!isValid) {
+        console.log('Shoot validation failed:', {
+          shootName: shoot.shootName,
+          location: shoot.location,
+          cartLength: shoot.cart.length,
+          startDate: shoot.selectedStartDate,
+          endDate: shoot.selectedEndDate
+        });
+      }
+      return isValid;
+    });
+    return allShootsValid;
   };
 
   return (
@@ -516,14 +643,40 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Approval Email</label>
-                  <input
-                    type="email"
-                    value={approvalEmail}
-                    onChange={(e) => setApprovalEmail(e.target.value)}
-                    placeholder="approver@company.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Approval Email(s)
+                    <span className="text-gray-400 ml-1">(Press Enter to add)</span>
+                  </label>
+                  <div className="w-full min-h-[42px] max-h-[120px] overflow-y-auto px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 text-sm flex flex-wrap gap-1.5 items-center">
+                    {approvalEmails.map((email, index) => (
+                      <div
+                        key={index}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs flex-shrink-0 max-w-full ${
+                          isValidEmail(email)
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'bg-red-100 text-red-700 border border-red-300'
+                        }`}
+                      >
+                        <span className="truncate max-w-[200px]">{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeEmailChip(email)}
+                          className="hover:bg-black hover:bg-opacity-10 rounded-full p-0.5 flex-shrink-0"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <input
+                      type="text"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={handleEmailInputKeyDown}
+                      onBlur={handleEmailInputBlur}
+                      placeholder={approvalEmails.length === 0 ? "Type email and press Enter" : ""}
+                      className="flex-1 min-w-[140px] outline-none bg-transparent"
+                    />
+                  </div>
                 </div>
               </div>
               </div>
@@ -615,6 +768,38 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                   placeholder="e.g., Studio 5, Mumbai"
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Call Time - Manual Input */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Call Time</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={timeHour}
+                    onChange={(e) => handleHourChange(e.target.value)}
+                    placeholder="HH"
+                    maxLength={2}
+                    className="w-16 px-3 py-2.5 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-400 font-bold">:</span>
+                  <input
+                    type="text"
+                    value={timeMinute}
+                    onChange={(e) => handleMinuteChange(e.target.value)}
+                    placeholder="MM"
+                    maxLength={2}
+                    className="w-16 px-3 py-2.5 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <select
+                    value={timePeriod}
+                    onChange={(e) => setTimePeriod(e.target.value as 'AM' | 'PM')}
+                    className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
               </div>
 
                 {/* Date Selection */}
@@ -1134,11 +1319,25 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              if (!isSubmitting && isFormValid()) {
-                handleSubmit(e);
+              console.log('Button clicked!');
+              console.log('isSubmitting:', isSubmitting);
+              console.log('isFormValid():', isFormValid());
+              
+              if (isSubmitting) {
+                console.log('Already submitting, ignoring');
+                return;
               }
+              
+              if (!isFormValid()) {
+                console.log('Form is not valid');
+                alert('Please fill in all required fields:\n- Requestor Name\n- At least one Approval Email\n- Shoot Name\n- Location\n- Start Date\n- End Date\n- At least one equipment item');
+                return;
+              }
+              
+              console.log('Form is valid, calling handleSubmit');
+              handleSubmit(e);
             }}
-            disabled={!isFormValid() || isSubmitting}
+            disabled={isSubmitting}
             className="px-8 py-3 rounded-full text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium hover:opacity-90"
             style={{ backgroundColor: '#2D60FF' }}
           >
