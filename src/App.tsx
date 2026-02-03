@@ -1117,15 +1117,24 @@ function AppContent() {
         vendorQuote: { amount, notes }
       };
     
-    // Update local state first for immediate UI feedback
-    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-    
-    // Then save to API (don't block on this)
+    // Save to API first
     try {
       await saveShootToAPI(updatedShoot);
     } catch (error) {
-      console.error('API save failed, data saved locally:', error);
+      console.error('API save failed:', error);
+      
+      // In PRODUCTION, show error and stop (vendor quote must be saved to database)
+      // In DEVELOPMENT, continue (allow testing without backend)
+      if (!import.meta.env.DEV) {
+        alert('Failed to save vendor quote to database. Please try again.\n\nError: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        return;
+      }
+      
+      console.log('⚠️ DEV MODE: Continuing despite API failure');
     }
+    
+    // Update local state after successful API save
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     // Add to pending submissions (for batch email)
     pendingQuoteSubmissions.current.push({ shootId, shoot: updatedShoot, amount });
@@ -1230,15 +1239,24 @@ function AppContent() {
       approvedAmount: shoot.vendorQuote?.amount
     };
     
-    // Update local state first for immediate UI feedback
-    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-    
-    // Then save to API
+    // Save to API first
     try {
       await saveShootToAPI(updatedShoot);
     } catch (error) {
       console.error('API save failed:', error);
+      
+      // In PRODUCTION, show error and stop (approval must be saved to database)
+      // In DEVELOPMENT, continue (allow testing without backend)
+      if (!import.meta.env.DEV) {
+        alert('Failed to save approval to database. Please try again.\n\nError: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        return;
+      }
+      
+      console.log('⚠️ DEV MODE: Continuing despite API failure');
     }
+    
+    // Update local state after successful API save
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     // Send approval email via SMTP to requestor
       triggerEmail(
@@ -1271,15 +1289,24 @@ function AppContent() {
             vendorQuote: undefined
     };
     
-    // Update local state first for immediate UI feedback
-    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
-    
-    // Then save to API
+    // Save to API first
     try {
       await saveShootToAPI(updatedShoot);
     } catch (error) {
       console.error('API save failed:', error);
+      
+      // In PRODUCTION, show error and stop (rejection must be saved to database)
+      // In DEVELOPMENT, continue (allow testing without backend)
+      if (!import.meta.env.DEV) {
+        alert('Failed to save rejection to database. Please try again.\n\nError: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        return;
+      }
+      
+      console.log('⚠️ DEV MODE: Continuing despite API failure');
     }
+    
+    // Update local state after successful API save
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     // Send rejection email via SMTP with threading support
     triggerEmail(
@@ -1439,8 +1466,19 @@ function AppContent() {
           await saveShootToAPI(shoot);
           console.log('Successfully saved shoot to API:', shoot.id);
         } catch (apiError) {
-          console.error('Failed to save shoot to API, continuing anyway:', shoot.id, apiError);
-          // Continue even if API fails
+          console.error('Failed to save shoot to API:', shoot.id, apiError);
+          
+          // In PRODUCTION, show error and stop (data must be saved to database)
+          // In DEVELOPMENT, continue (allow testing without backend)
+          if (!import.meta.env.DEV) {
+            alert('Failed to save multi-shoot request to database. Please try again or contact support.\n\nError: ' + (apiError instanceof Error ? apiError.message : 'Unknown error'));
+            setIsSubmitting(false);
+            // Remove the shoots we just added since save failed
+            setShoots(prev => prev.filter(s => !newShoots.find(ns => ns.id === s.id)));
+            return;
+          }
+          
+          console.log('⚠️ DEV MODE: Continuing with local state despite API failure');
         }
       }
       
@@ -1491,8 +1529,17 @@ function AppContent() {
       await saveShootToAPI(newShoot);
       console.log('Successfully saved to API');
     } catch (apiError) {
-      console.error('Failed to save to API, continuing anyway:', apiError);
-      // Continue with local state update even if API fails
+      console.error('Failed to save to API:', apiError);
+      
+      // In PRODUCTION, show error and stop (data must be saved to database)
+      // In DEVELOPMENT, continue (allow testing without backend)
+      if (!import.meta.env.DEV) {
+        alert('Failed to save shoot request to database. Please try again or contact support.\n\nError: ' + (apiError instanceof Error ? apiError.message : 'Unknown error'));
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('⚠️ DEV MODE: Continuing with local state despite API failure');
     }
     
     // Then update local state
