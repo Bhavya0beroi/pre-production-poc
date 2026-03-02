@@ -194,12 +194,11 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
   const activeQuote = shootQuotes[activeShootIndex];
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#F5F7FA' }}>
+    <div className="min-h-screen flex items-center justify-center p-2 sm:p-4" style={{ backgroundColor: '#F5F7FA' }}>
       <div 
-        className="bg-white rounded-2xl overflow-hidden flex flex-col"
+        className="bg-white rounded-2xl overflow-hidden flex flex-col w-full"
         style={{ 
-          width: isMultiShoot ? '500px' : '420px',
-          maxWidth: '100%',
+          maxWidth: isMultiShoot ? '500px' : '420px',
           maxHeight: '90vh',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
         }}
@@ -283,15 +282,15 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                 </div>
                 
                 {/* Shoot tabs - large card style */}
-                <div className="px-6 py-4 bg-gray-100">
+                <div className="px-4 sm:px-6 py-4 bg-gray-100">
                   <div className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wide">Select Shoot to Edit:</div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {shootQuotes.map((quote, index) => (
                       <button
                         key={quote.shootId}
                         type="button"
                         onClick={() => setActiveShootIndex(index)}
-                        className={`p-4 rounded-xl text-left transition-all border-2 ${
+                        className={`p-3 sm:p-4 rounded-xl text-left transition-all border-2 touch-manipulation ${
                           activeShootIndex === index
                             ? 'text-white shadow-lg'
                             : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:shadow'
@@ -299,14 +298,14 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                         style={activeShootIndex === index ? { backgroundColor: '#2D60FF', borderColor: '#2D60FF' } : {}}
                       >
                         <div className="flex items-center gap-2 mb-1">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          <div className={`w-6 h-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
                             activeShootIndex === index ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600'
                           }`}>
                             {index + 1}
                           </div>
-                          <span className="font-semibold truncate">{quote.shootName || `Shoot ${index + 1}`}</span>
+                          <span className="font-semibold text-sm truncate">{quote.shootName || `Shoot ${index + 1}`}</span>
                         </div>
-                        <div className={`text-xs ${activeShootIndex === index ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <div className={`text-xs leading-relaxed ${activeShootIndex === index ? 'text-blue-100' : 'text-gray-500'}`}>
                           {quote.date} • {quote.location}
                         </div>
                         {quote.callTime && (
@@ -325,7 +324,7 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
             )}
 
             {/* Quote Table */}
-            <div className="px-6 py-4">
+            <div className="px-4 sm:px-6 py-4">
               {isMultiShoot && (
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
@@ -346,21 +345,21 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-2 py-2 text-left text-xs text-gray-700 w-[35%] sm:w-auto">Item</th>
-                      <th className="px-2 py-2 text-center text-xs text-gray-700 w-[15%] sm:w-auto">Qty</th>
-                      <th className="px-2 py-2 text-right text-xs text-gray-700 w-[50%] sm:w-auto">Your Price</th>
+                      <th className="px-2 py-2 text-left text-xs text-gray-700">Item</th>
+                      <th className="px-2 py-2 text-center text-xs text-gray-700" style={{ width: '15%' }}>Qty</th>
+                      <th className="px-2 py-2 text-right text-xs text-gray-700" style={{ width: '40%' }}>Your Price</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {activeQuote?.items.map((item) => (
                       <tr key={item.id}>
                         <td className="px-2 py-3">
-                          <div className="text-xs sm:text-sm text-gray-900 break-words">{item.name}</div>
-                          <div className="text-xs text-gray-500">{item.days} day(s)</div>
+                          <div className="text-xs sm:text-sm text-gray-900 break-words leading-tight">{item.name}</div>
+                          <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">{item.days} day(s)</div>
                         </td>
-                        <td className="px-2 py-3 text-center">
+                        <td className="px-1 py-3 text-center">
                           <span 
-                            className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium"
+                            className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium"
                             style={{ backgroundColor: '#EFF6FF', color: '#2D60FF' }}
                           >
                             {item.quantity}
@@ -369,6 +368,7 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                         <td className="px-2 py-3">
                           <input
                             type="number"
+                            inputMode="numeric"
                             step="100"
                             min="0"
                             value={item.vendorRate === 0 ? '' : item.vendorRate}
@@ -378,8 +378,9 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
                               }
                             }}
                             onChange={(e) => updateItem(activeShootIndex, item.id, parseInt(e.target.value) || 0)}
-                            className="w-full px-2 sm:px-3 py-2 border-2 border-blue-300 rounded text-right text-sm sm:text-base focus:outline-none focus:border-blue-500"
+                            className="w-full px-2 py-2 sm:py-2.5 border-2 border-blue-300 rounded text-right text-sm sm:text-base focus:outline-none focus:border-blue-500 touch-manipulation"
                             placeholder="₹0"
+                            style={{ minHeight: '40px' }}
                           />
                         </td>
                       </tr>
@@ -437,12 +438,12 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
             </div>
 
             {/* Submit Button */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-white sticky bottom-0">
+            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 bg-white sticky bottom-0">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-2.5 rounded-lg text-white transition-all font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: '#2D60FF' }}
+                className="w-full py-3 sm:py-2.5 rounded-lg text-white transition-all font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-sm sm:text-base"
+                style={{ backgroundColor: '#2D60FF', minHeight: '48px' }}
               >
                 {isSubmitting ? (
                   <span className="flex items-center justify-center gap-2">
