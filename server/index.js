@@ -101,15 +101,34 @@ async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
   
   // Fallback to Resend HTTP API
   try {
-    console.log('📧 Using Resend API to send email');
-    console.log(`   Recipient: ${to}`);
+    // ⚠️ WARNING: Resend free tier can only send to verified emails
+    // This fallback sends to a verified email with a banner showing intended recipient
+    const VERIFIED_EMAIL = 'bhavya.oberoi@learnapp.co';
     
-    // Send directly to recipient without banner when using Resend
+    console.log('⚠️ RESEND FALLBACK ACTIVE (Free tier limitation):');
+    console.log(`   Intended recipient: ${to}`);
+    console.log(`   Actually sending to: ${VERIFIED_EMAIL} (verified email)`);
+    console.log(`   💡 To send to ANY email: Upgrade to SendGrid paid plan ($15/month)`);
+    
+    // Add a banner showing the intended recipient (for free tier limitation)
+    const emailWithBanner = `
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px 20px; margin-bottom: 20px; border-radius: 8px;">
+        <p style="margin: 0; color: white; font-size: 14px;">
+          <strong>📧 INTENDED RECIPIENT:</strong> ${to}
+        </p>
+        <p style="margin: 5px 0 0 0; color: rgba(255,255,255,0.8); font-size: 12px;">
+          ⚠️ This email was sent to you because Resend free tier can only send to verified emails.
+          To send to any email address, upgrade to SendGrid paid plan.
+        </p>
+      </div>
+      ${html}
+    `;
+    
     const emailPayload = {
       from: 'ShootFlow <onboarding@resend.dev>',
-      to: to,
-      subject: subject,
-      html: html
+      to: VERIFIED_EMAIL,
+      subject: `[For: ${to}] ${subject}`,
+      html: emailWithBanner
     };
 
     if (threadOptions.threadId) {
@@ -127,7 +146,7 @@ async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || 'Resend API error');
     
-    console.log('✅ Email sent via Resend:', data.id, '| To:', to);
+    console.log('✅ Email sent via Resend (fallback):', data.id, '| For:', to, '| Delivered to:', VERIFIED_EMAIL);
     return { messageId: threadOptions._generatedMessageId || data.id, resendId: data.id, method: 'resend' };
     
   } catch (resendError) {
