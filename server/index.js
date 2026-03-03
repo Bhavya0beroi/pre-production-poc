@@ -17,7 +17,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Get API key at: https://sendgrid.com → Settings → API Keys
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
-const EMAIL_FROM = process.env.EMAIL_FROM || 'bhavya.oberoi@learnapp.co';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'product@learnapp.com';
 
 // Resend fallback (for when SendGrid not configured)
 const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gPwuFNvg_JEL3arzPU7QApcCZz7CW5xFu';
