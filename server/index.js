@@ -339,11 +339,9 @@ const emailTemplates = {
       
       return equipment.map(eq => {
         const price = eq.vendorRate || eq.dailyRate || eq.rate || 0;
-        const qty = eq.quantity || eq.qty || 1;
-        const total = price * qty;
         return `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;">
-          <span style="color: #333;">${eq.name || eq.itemName || '-'}</span>
-          <span style="color: #333; font-weight: 600;">₹${total.toLocaleString()}</span>
+          <span style="color: #333;">${eq.name || eq.itemName || '-'} ${eq.quantity > 1 ? `(${eq.quantity}×)` : ''}</span>
+          <span style="color: #333; font-weight: 600;">₹${price.toLocaleString()}</span>
         </div>`;
       }).join('');
     };
