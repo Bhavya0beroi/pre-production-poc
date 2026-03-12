@@ -169,11 +169,11 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
     const equipment = shootsData[shootId] || [];
     const vendorTotal = equipment.reduce((sum, eq) => {
       const rate = eq.vendorRate || eq.dailyRate || 0;
-      return sum + (rate * (eq.quantity || 1));
+      return sum + rate;
     }, 0);
     const editedTotal = equipment.reduce((sum, eq) => {
       const rate = eq.editedVendorRate || eq.vendorRate || eq.dailyRate || 0;
-      return sum + (rate * (eq.quantity || 1));
+      return sum + rate;
     }, 0);
     return { vendorTotal, editedTotal };
   };
@@ -491,7 +491,7 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
                                 ₹{currentRate.toLocaleString()}
                               </div>
                             )}
-                            <div className="text-[10px]" style={{ color: '#9CA3AF' }}>per unit</div>
+                            <div className="text-[10px]" style={{ color: '#9CA3AF' }}>total</div>
                           </div>
                         </div>
                       </div>
@@ -557,7 +557,7 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
                               ₹{currentRate.toLocaleString()}
                             </div>
                           )}
-                          <div className="text-xs" style={{ color: '#9CA3AF' }}>per unit</div>
+                          <div className="text-xs" style={{ color: '#9CA3AF' }}>total</div>
                         </div>
                         
                         <button
