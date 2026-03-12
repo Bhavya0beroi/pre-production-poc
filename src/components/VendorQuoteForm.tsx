@@ -104,12 +104,12 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
 
   const calculateShootTotal = (shootIndex: number) => {
     if (!shootQuotes[shootIndex]) return 0;
-    return shootQuotes[shootIndex].items.reduce((sum, item) => sum + item.vendorRate, 0);
+    return shootQuotes[shootIndex].items.reduce((sum, item) => sum + (item.vendorRate * item.quantity), 0);
   };
 
   const calculateGrandTotal = () => {
     return shootQuotes.reduce((sum, quote) => 
-      sum + quote.items.reduce((itemSum, item) => itemSum + item.vendorRate, 0), 0
+      sum + quote.items.reduce((itemSum, item) => itemSum + (item.vendorRate * item.quantity), 0), 0
     );
   };
 
