@@ -32,7 +32,7 @@ console.log('   SendGrid:', SENDGRID_API_KEY ? '✅ Configured' : '⚠️ Not co
 function generateMessageId() {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 15);
-  return `${timestamp}.${random}@learnapp.co`;
+  return `${timestamp}.${random}@learnapp.com`;
 }
 
 // Send email via SendGrid HTTP API (with Resend fallback)
@@ -103,7 +103,7 @@ async function sendEmailViaSMTP(to, subject, html, threadOptions = {}) {
   try {
     // ⚠️ WARNING: Resend free tier can only send to verified emails
     // This fallback sends to a verified email with a banner showing intended recipient
-    const VERIFIED_EMAIL = 'bhavya.oberoi@learnapp.co';
+    const VERIFIED_EMAIL = 'bhavya.oberoi@learnapp.com';
     
     console.log('⚠️ RESEND FALLBACK ACTIVE (Free tier limitation):');
     console.log(`   Intended recipient: ${to}`);
@@ -1172,7 +1172,7 @@ app.post('/api/email/batch', async (req, res) => {
 // Test complete email thread - sends all 6 steps in sequence
 app.post('/api/email/test-thread', async (req, res) => {
   try {
-    const to = req.body.to || 'bhavya.oberoi@learnapp.co';
+    const to = req.body.to || 'bhavya.oberoi@learnapp.com';
     const testShoot = {
       id: 'thread-test-' + Date.now(),
       name: 'Equipment for Brand Video Shoot',
@@ -1268,7 +1268,7 @@ app.post('/api/email/test', async (req, res) => {
       approvedAmount: 25000
     };
     
-    const to = req.body.to || process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co';
+    const to = req.body.to || process.env.SMTP_USER || 'bhavya.oberoi@learnapp.com';
     const template = req.body.template || 'newRequest';
     
     const result = await sendEmail(to, template, testShoot);
@@ -1283,7 +1283,7 @@ app.post('/api/email/test', async (req, res) => {
 app.get('/api/email/status', (req, res) => {
   res.json({
     configured: true,
-    smtpUser: (process.env.SMTP_USER || 'bhavya.oberoi@learnapp.co').replace(/(.{3}).*(@.*)/, '$1***$2'),
+    smtpUser: (process.env.SMTP_USER || 'bhavya.oberoi@learnapp.com').replace(/(.{3}).*(@.*)/, '$1***$2'),
     templates: Object.keys(emailTemplates)
   });
 });

@@ -357,7 +357,7 @@ function AppContent() {
     // Create the email for UI notification
     const newEmail: EmailMessage = {
       id: Date.now().toString(),
-      from: emailType === 'quote_submitted' ? 'vendor@gopalamedia.com' : 'bhavya.oberoi@learnapp.co',
+      from: emailType === 'quote_submitted' ? 'vendor@gopalamedia.com' : 'bhavya.oberoi@learnapp.com',
       to: recipientEmail,
       subject: emailSubjects[emailType],
       body: `Email sent via SMTP for ${shootName}`,

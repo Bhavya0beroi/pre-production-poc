@@ -14,9 +14,9 @@ export type EmailTemplate =
 // Default email recipients for each workflow step
 export const DEFAULT_RECIPIENTS = {
   vendor: 'vendor@example.com',           // Replace with actual vendor email
-  approver: 'bhavya.oberoi@learnapp.co',  // Approver (Swati's email)
-  finance: 'bhavya.oberoi@learnapp.co',   // Finance team
-  admin: 'bhavya.oberoi@learnapp.co'      // Admin notifications
+  approver: 'bhavya.oberoi@learnapp.com',  // Approver (Swati's email)
+  finance: 'bhavya.oberoi@learnapp.com',   // Finance team
+  admin: 'bhavya.oberoi@learnapp.com'      // Admin notifications
 };
 
 interface EmailPayload {
