@@ -233,13 +233,13 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
                 Review & Send to Vendor →
               </a>
               <br><br>
               <span style="color: #666; font-size: 13px;">Or copy this link: </span>
-              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${appUrl}</code>
+              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${ appUrl}?shootId=${shoot.id}</code>
             </div>
             
             <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
@@ -305,13 +305,13 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin: 5px;">
                 Review & Send to Vendor →
               </a>
               <br><br>
               <span style="color: #666; font-size: 13px;">Or copy this link: </span>
-              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${appUrl}</code>
+              <code style="background: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">${ appUrl}?shootId=${shoot.id}</code>
             </div>
             
             <p style="color: #666; line-height: 1.6; margin-top: 30px;">Best regards,<br><strong>Pre-Production Team</strong></p>
@@ -376,12 +376,12 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #28a745; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
                 Review & Send for Approval →
               </a>
               <button 
-                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                onclick="navigator.clipboard.writeText('${appUrl}?shootId=${shoot.id}'); alert('Link copied!');"
                 style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
                 Copy Link
               </button>
@@ -434,12 +434,12 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #28a745; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
                 👉 View Final Shoot Details
               </a>
               <button 
-                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                onclick="navigator.clipboard.writeText('${appUrl}?shootId=${shoot.id}'); alert('Link copied!');"
                 style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
                 Copy Link
               </button>
@@ -520,12 +520,12 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #ffc107; color: #212529; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
                 👉 Click here to Upload Invoice
               </a>
               <button 
-                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                onclick="navigator.clipboard.writeText('${appUrl}?shootId=${shoot.id}'); alert('Link copied!');"
                 style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
                 Copy Link
               </button>
@@ -577,12 +577,12 @@ const emailTemplates = {
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${appUrl}" 
+              <a href="${appUrl}?shootId=${shoot.id}" 
                  style="background: #007bff; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-right: 10px;">
                 View in ShootFlow →
               </a>
               <button 
-                onclick="navigator.clipboard.writeText('${appUrl}'); alert('Link copied!');"
+                onclick="navigator.clipboard.writeText('${appUrl}?shootId=${shoot.id}'); alert('Link copied!');"
                 style="background: #f0f0f0; color: #333; padding: 14px 20px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; cursor: pointer; border: 1px solid #ccc;">
                 Copy Link
               </button>
