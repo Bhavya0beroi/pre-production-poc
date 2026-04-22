@@ -96,7 +96,11 @@ export async function sendSlackNotification(
   // Build equipment lines (max 15 to keep message clean)
   const equipmentLines = (shoot.equipment ?? [])
     .slice(0, 15)
-    .map(e => `• ${e.name} × ${e.quantity}`)
+    .map(e => {
+      const lineTotal = (e.dailyRate || 0) * (e.quantity || 1) * (e.days || 1);
+      const priceStr = lineTotal > 0 ? ` — ₹${lineTotal.toLocaleString('en-IN')}` : '';
+      return `• ${e.name} × ${e.quantity}${priceStr}`;
+    })
     .join('\n');
   const extraCount = (shoot.equipment?.length ?? 0) - 15;
 
