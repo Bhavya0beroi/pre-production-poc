@@ -201,7 +201,7 @@ const emailTemplates = {
     const equipment = shoot.equipment || [];
     const totalItems = equipment.length;
     const estimatedBudget = calculateBudget(equipment);
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     return {
       subject: `🔔 ACTION REQUIRED: New Shoot Request - ${shoot.name}`,
@@ -264,7 +264,7 @@ const emailTemplates = {
     const estimatedBudget = calculateBudget(allEquipment);
     const requestedBy = shoot1.requestor?.name || data.requestorName || 'Pre-Production Team';
     const shootDates = shoot1.date || shoot1.dates || 'TBD';
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     return {
       subject: `🔔 ACTION REQUIRED: New Equipment Request - ${data.shoots?.length || 2} Shoots Request`,
@@ -331,7 +331,7 @@ const emailTemplates = {
     const recipientName = shoot.recipientName || 'Team';
     const equipment = shoot.equipment || [];
     const vendorTotal = shoot.vendorQuote?.amount || 0;
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     // Format equipment list for quote email
     const formatQuoteEquipment = (equipment) => {
@@ -405,7 +405,7 @@ const emailTemplates = {
     const approvedAmount = shoot.approvedAmount || shoot.vendorQuote?.amount || 0;
     const approvedBy = shoot.approvedBy || 'Swati';
     const vendorName = shoot.vendorName || 'Gopala Media';
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     return {
       subject: `✅ Budget Approved: ${shoot.name} - Ready for Shoot`,
@@ -499,7 +499,7 @@ const emailTemplates = {
   invoiceReminder: (shoot) => {
     const recipientName = shoot.recipientName || 'Team';
     const vendorName = shoot.vendorName || 'Gopala Media';
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     return {
       subject: `⚠️ Invoice Pending: ${shoot.name} - Action Required`,
@@ -552,7 +552,7 @@ const emailTemplates = {
   // 6. Invoice uploaded - notify finance
   invoiceUploaded: (shoot) => {
     const recipientName = shoot.recipientName || 'Team';
-    const appUrl = process.env.APP_URL || 'https://pre-production-poc.up.railway.app';
+    const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
     
     return {
       subject: `📄 Invoice Uploaded: ${shoot.name}`,

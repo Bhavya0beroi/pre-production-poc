@@ -90,41 +90,48 @@ export async function sendSlackNotification(
     ? `₹${shoot.estimatedBudget.toLocaleString('en-IN')}`
     : '—';
 
-  const appUrl = shoot.appUrl || 'https://pre-production-poc.up.railway.app';
+  const appUrl = shoot.appUrl || 'https://pre-production-poc-production.up.railway.app';
   const link = shoot.shootId ? `${appUrl}?shootId=${shoot.shootId}` : appUrl;
 
-  // Build equipment lines (max 10 to keep message clean)
+  // Build equipment lines (max 15 to keep message clean)
   const equipmentLines = (shoot.equipment ?? [])
-    .slice(0, 10)
+    .slice(0, 15)
     .map(e => `• ${e.name} × ${e.quantity}`)
     .join('\n');
-  const extraCount = (shoot.equipment?.length ?? 0) - 10;
+  const extraCount = (shoot.equipment?.length ?? 0) - 15;
+
+  // ── Single-column layout — easy to read, matches email style ──
+  const detailsText = [
+    `*Shoot Name:*  ${shoot.shootName}`,
+    `*Date:*  ${shoot.dates}`,
+    `*Requested By:*  ${shoot.requestorName}`,
+    `*Total Items:*  ${totalItems}`,
+    `*Estimated Budget:*  ${budget}`,
+  ].join('\n');
 
   const blocks: object[] = [
     {
       type: 'header',
       text: { type: 'plain_text', text: '🔔 New Shoot Request Submitted', emoji: true },
     },
+    { type: 'divider' },
     {
       type: 'section',
-      fields: [
-        { type: 'mrkdwn', text: `*Shoot Name*\n${shoot.shootName}` },
-        { type: 'mrkdwn', text: `*Date*\n${shoot.dates}` },
-        { type: 'mrkdwn', text: `*Requested By*\n${shoot.requestorName}` },
-        { type: 'mrkdwn', text: `*Total Items*\n${totalItems}` },
-        { type: 'mrkdwn', text: `*Estimated Budget*\n${budget}` },
-      ],
+      text: { type: 'mrkdwn', text: detailsText },
     },
   ];
 
   if (equipmentLines) {
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*📦 Equipment List*\n${equipmentLines}${extraCount > 0 ? `\n_…and ${extraCount} more_` : ''}`,
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*📦 Equipment List*\n${equipmentLines}${extraCount > 0 ? `\n_…and ${extraCount} more_` : ''}`,
+        },
       },
-    });
+    );
   }
 
   blocks.push(
@@ -135,14 +142,19 @@ export async function sendSlackNotification(
         type: 'mrkdwn',
         text: mentionText
           ? `${mentionText} — please review and send to vendor.`
-          : 'Please review and send to vendor.',
+          : '_Please review and send to vendor._',
       },
-      accessory: {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Review & Send to Vendor →', emoji: true },
-        url: link,
-        style: 'primary',
-      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Review & Send to Vendor →', emoji: true },
+          url: link,
+          style: 'primary',
+        },
+      ],
     },
   );
 
