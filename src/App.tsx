@@ -15,7 +15,15 @@ import { RolePanel } from './components/RolePanel';
 import { SlackSettings } from './components/SlackSettings';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DEFAULT_RECIPIENTS } from './services/emailService';
-import { getSlackSettings, sendSlackNotification } from './services/slackService';
+import {
+  getSlackSettings,
+  sendSlackNotification,
+  slackQuoteSubmitted,
+  slackQuoteApproved,
+  slackQuoteRejected,
+  slackInvoiceUploaded,
+  slackPaymentCompleted,
+} from './services/slackService';
 
 // API URL Configuration
 // In production (Railway), use the production API
@@ -1232,6 +1240,20 @@ function AppContent() {
       submissions.forEach(s => {
         addActivityToShoot(s.shootId, 'Quote Submitted', `Vendor submitted quote: ₹${s.amount.toLocaleString()}`);
       });
+
+      // Slack: notify approval reviewer (separate person) for each submission
+      getSlackSettings().then(sl => {
+        if (!sl.webhook_url) return;
+        const approvalMentions = (sl.approvalMentions || []).length > 0 ? sl.approvalMentions : sl.mentions;
+        submissions.forEach(s => {
+          slackQuoteSubmitted(sl.webhook_url, {
+            id: s.shootId,
+            name: s.shoot.name,
+            dates: s.shoot.date || s.shoot.dates || '—',
+            amount: s.amount,
+          }, approvalMentions).catch(() => {});
+        });
+      });
     }, 500); // Wait 500ms for all submissions to come in
     
     // Only redirect to dashboard if not in standalone vendor mode
@@ -1289,6 +1311,15 @@ function AppContent() {
       );
       
     addActivityToShoot(shootId, 'Quote Approved', `Approved by founder. Amount: ₹${shoot.vendorQuote?.amount?.toLocaleString()}`);
+
+    getSlackSettings().then(sl => {
+      if (!sl.webhook_url) return;
+      slackQuoteApproved(sl.webhook_url, {
+        id: shootId, name: shoot.name,
+        dates: shoot.date || shoot.dates || '—',
+        amount: shoot.vendorQuote?.amount,
+      }, sl.mentions).catch(() => {});
+    });
   };
 
   const handleReject = async (shootId: string, reason: string) => {
@@ -1336,6 +1367,15 @@ function AppContent() {
     );
     
     addActivityToShoot(shootId, 'Quote Rejected', `Reason: ${reason}. Sent back to vendor for revision.`);
+
+    getSlackSettings().then(sl => {
+      if (!sl.webhook_url) return;
+      slackQuoteRejected(sl.webhook_url, {
+        id: shootId, name: shoot.name,
+        dates: shoot.date || shoot.dates || '—',
+        reason,
+      }, sl.mentions).catch(() => {});
+    });
   };
 
   const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
@@ -1366,6 +1406,15 @@ function AppContent() {
       );
       
       addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
+
+    getSlackSettings().then(sl => {
+      if (!sl.webhook_url) return;
+      slackInvoiceUploaded(sl.webhook_url, {
+        id: shootId, name: shoot.name,
+        dates: shoot.date || shoot.dates || '—',
+        fileName,
+      }, sl.mentions).catch(() => {});
+    });
   };
 
   const handleMarkPaid = async (shootId: string) => {
@@ -1395,6 +1444,15 @@ function AppContent() {
     );
     
     addActivityToShoot(shootId, 'Payment Completed', 'Invoice verified and payment processed');
+
+    getSlackSettings().then(sl => {
+      if (!sl.webhook_url) return;
+      slackPaymentCompleted(sl.webhook_url, {
+        id: shootId, name: shoot.name,
+        dates: shoot.date || shoot.dates || '—',
+        amount: shoot.approvedAmount || shoot.vendorQuote?.amount,
+      }, sl.mentions).catch(() => {});
+    });
     
     setSelectedShootId(null);
   };

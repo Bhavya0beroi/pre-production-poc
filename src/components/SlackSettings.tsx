@@ -62,6 +62,7 @@ export function SlackSettings({
   const [settings, setSettings] = useState<SlackSettingsType>({
     webhook_url: '',
     mentions: [],
+    approvalMentions: [],
     notifications: DEFAULT_SLACK_PREFS,
   });
   const [loading, setLoading] = useState(false);
@@ -149,6 +150,19 @@ export function SlackSettings({
 
   const removeMention = (i: number) =>
     setSettings(s => ({ ...s, mentions: s.mentions.filter((_, idx) => idx !== i) }));
+
+  const addApprovalMention = () =>
+    setSettings(s => ({ ...s, approvalMentions: [...(s.approvalMentions || []), { label: '', slack_id: '' }] }));
+
+  const updateApprovalMention = (i: number, field: keyof SlackMention, value: string) =>
+    setSettings(s => {
+      const updated = [...(s.approvalMentions || [])];
+      updated[i] = { ...updated[i], [field]: value };
+      return { ...s, approvalMentions: updated };
+    });
+
+  const removeApprovalMention = (i: number) =>
+    setSettings(s => ({ ...s, approvalMentions: (s.approvalMentions || []).filter((_, idx) => idx !== i) }));
 
   const toggleNotification = (key: string) =>
     setSettings(s => ({
@@ -294,6 +308,65 @@ export function SlackSettings({
                       <button
                         onClick={() => removeMention(i)}
                         className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Approval Reviewer — tagged specifically when quote needs approval */}
+            <div className="mb-5 p-4 rounded-xl border-2 border-dashed" style={{ borderColor: '#FCD34D', backgroundColor: '#FFFBEB' }}>
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#92400E' }}>
+                    Approval Reviewer
+                  </label>
+                  <p className="text-xs mt-0.5" style={{ color: '#A16207' }}>
+                    Tagged <strong>only</strong> when a quote is submitted and needs approval
+                  </p>
+                </div>
+                <button
+                  onClick={addApprovalMention}
+                  className="flex items-center gap-1 text-xs font-medium transition-colors"
+                  style={{ color: '#D97706' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              </div>
+
+              {(settings.approvalMentions || []).length === 0 && (
+                <p className="text-xs mt-2" style={{ color: '#B45309' }}>
+                  No approval reviewer set — quote notifications will use "Notify People" above.
+                </p>
+              )}
+
+              {(settings.approvalMentions || []).length > 0 && (
+                <div className="space-y-2 mt-2">
+                  {(settings.approvalMentions || []).map((m, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Name (e.g. Bhavya)"
+                        value={m.label}
+                        onChange={e => updateApprovalMention(i, 'label', e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg border text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2"
+                        style={{ borderColor: '#FCD34D', backgroundColor: '#FFFDE7' }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Slack ID (U012AB3CD)"
+                        value={m.slack_id}
+                        onChange={e => updateApprovalMention(i, 'slack_id', e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-lg border text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 font-mono"
+                        style={{ borderColor: '#FCD34D', backgroundColor: '#FFFDE7' }}
+                      />
+                      <button
+                        onClick={() => removeApprovalMention(i)}
+                        className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-yellow-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                       >
                         <X className="w-4 h-4" />
                       </button>

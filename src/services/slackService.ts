@@ -18,6 +18,8 @@ export interface SlackNotificationPrefs {
 export interface SlackSettings {
   webhook_url: string;
   mentions: SlackMention[];
+  /** Separate people to tag specifically for quote-approval notifications */
+  approvalMentions: SlackMention[];
   notifications: SlackNotificationPrefs;
 }
 
@@ -34,22 +36,36 @@ export async function getSlackSettings(): Promise<SlackSettings> {
     const res = await fetch(`${API_URL}/api/slack/settings`);
     if (!res.ok) throw new Error('Failed to fetch');
     const data = await res.json();
+    // approvalMentions is stored inside the notifications JSON to avoid schema change
+    const notifs = data.notifications || {};
+    const approvalMentions: SlackMention[] = notifs.approvalMentions || [];
+    const { approvalMentions: _drop, ...cleanNotifs } = notifs;
     return {
       webhook_url: data.webhook_url || '',
       mentions: data.mentions || [],
-      notifications: { ...DEFAULT_SLACK_PREFS, ...(data.notifications || {}) },
+      approvalMentions,
+      notifications: { ...DEFAULT_SLACK_PREFS, ...cleanNotifs },
     };
   } catch {
-    return { webhook_url: '', mentions: [], notifications: DEFAULT_SLACK_PREFS };
+    return { webhook_url: '', mentions: [], approvalMentions: [], notifications: DEFAULT_SLACK_PREFS };
   }
 }
 
 export async function saveSlackSettings(settings: SlackSettings): Promise<boolean> {
   try {
+    // Pack approvalMentions inside notifications so no DB schema change needed
+    const notificationsWithApproval = {
+      ...settings.notifications,
+      approvalMentions: settings.approvalMentions,
+    };
     const res = await fetch(`${API_URL}/api/slack/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
+      body: JSON.stringify({
+        webhook_url: settings.webhook_url,
+        mentions: settings.mentions,
+        notifications: notificationsWithApproval,
+      }),
     });
     return res.ok;
   } catch {
@@ -200,4 +216,171 @@ export async function testSlackConnection(
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Unknown error' };
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Per-event Slack helpers
+// All are fire-and-forget — call with .catch(() => {})
+// ─────────────────────────────────────────────────────────────
+
+async function postToSlack(webhookUrl: string, text: string, blocks: object[]) {
+  const res = await fetch(`${API_URL}/api/slack/notify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ webhook_url: webhookUrl, text, blocks }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.details || err.error || `HTTP ${res.status}`);
+  }
+}
+
+function mentionLine(mentions: SlackMention[]) {
+  if (!mentions.length) return null;
+  return mentions.map(m => (m.slack_id ? `<@${m.slack_id}>` : `@${m.label}`)).join(' ');
+}
+
+function buildBlocks(
+  header: string,
+  details: Record<string, string>,
+  mentions: SlackMention[],
+  link?: string,
+  linkLabel?: string,
+): object[] {
+  const detailText = Object.entries(details)
+    .map(([k, v]) => `*${k}:*  ${v}`)
+    .join('\n');
+
+  const blocks: object[] = [
+    { type: 'header', text: { type: 'plain_text', text: header, emoji: true } },
+    { type: 'divider' },
+    { type: 'section', text: { type: 'mrkdwn', text: detailText } },
+  ];
+
+  const mt = mentionLine(mentions);
+  if (mt) {
+    blocks.push({ type: 'divider' });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: mt } });
+  }
+
+  if (link && linkLabel) {
+    blocks.push({
+      type: 'actions',
+      elements: [{
+        type: 'button',
+        text: { type: 'plain_text', text: linkLabel, emoji: true },
+        url: link,
+        style: 'primary',
+      }],
+    });
+  }
+
+  return blocks;
+}
+
+const APP = 'https://pre-production-poc-production.up.railway.app';
+
+export async function slackQuoteSubmitted(
+  webhookUrl: string,
+  shoot: { id: string; name: string; dates: string; amount: number },
+  approvalMentions: SlackMention[],
+) {
+  const link = `${APP}?shootId=${shoot.id}`;
+  const blocks = buildBlocks(
+    '💰 Quote Received — Needs Approval',
+    {
+      'Shoot': shoot.name,
+      'Date': shoot.dates,
+      'Vendor Total': `₹${shoot.amount.toLocaleString('en-IN')}`,
+      'Action Needed': 'Review and approve the quote',
+    },
+    approvalMentions,
+    link,
+    'Review & Approve →',
+  );
+  await postToSlack(webhookUrl, `💰 Quote received for ${shoot.name} — needs approval`, blocks);
+}
+
+export async function slackQuoteApproved(
+  webhookUrl: string,
+  shoot: { id: string; name: string; dates: string; amount?: number },
+  mentions: SlackMention[],
+) {
+  const link = `${APP}?shootId=${shoot.id}`;
+  const blocks = buildBlocks(
+    '✅ Quote Approved',
+    {
+      'Shoot': shoot.name,
+      'Date': shoot.dates,
+      'Approved Amount': shoot.amount ? `₹${shoot.amount.toLocaleString('en-IN')}` : '—',
+      'Status': 'Ready for shoot',
+    },
+    mentions,
+    link,
+    'View Shoot →',
+  );
+  await postToSlack(webhookUrl, `✅ Quote approved for ${shoot.name}`, blocks);
+}
+
+export async function slackQuoteRejected(
+  webhookUrl: string,
+  shoot: { id: string; name: string; dates: string; reason?: string },
+  mentions: SlackMention[],
+) {
+  const link = `${APP}?shootId=${shoot.id}`;
+  const blocks = buildBlocks(
+    '❌ Quote Rejected — Sent Back to Vendor',
+    {
+      'Shoot': shoot.name,
+      'Date': shoot.dates,
+      'Reason': shoot.reason || 'No reason provided',
+      'Status': 'Vendor will revise and resubmit',
+    },
+    mentions,
+    link,
+    'View Shoot →',
+  );
+  await postToSlack(webhookUrl, `❌ Quote rejected for ${shoot.name}`, blocks);
+}
+
+export async function slackInvoiceUploaded(
+  webhookUrl: string,
+  shoot: { id: string; name: string; dates: string; fileName: string },
+  mentions: SlackMention[],
+) {
+  const link = `${APP}?shootId=${shoot.id}`;
+  const blocks = buildBlocks(
+    '📄 Invoice Uploaded — Action Required',
+    {
+      'Shoot': shoot.name,
+      'Date': shoot.dates,
+      'File': shoot.fileName,
+      'Action Needed': 'Review invoice and mark as paid',
+    },
+    mentions,
+    link,
+    'View Invoice →',
+  );
+  await postToSlack(webhookUrl, `📄 Invoice uploaded for ${shoot.name}`, blocks);
+}
+
+export async function slackPaymentCompleted(
+  webhookUrl: string,
+  shoot: { id: string; name: string; dates: string; amount?: number },
+  mentions: SlackMention[],
+) {
+  const link = `${APP}?shootId=${shoot.id}`;
+  const blocks = buildBlocks(
+    '💵 Payment Completed',
+    {
+      'Shoot': shoot.name,
+      'Date': shoot.dates,
+      'Amount Paid': shoot.amount ? `₹${shoot.amount.toLocaleString('en-IN')}` : '—',
+      'Status': 'Completed ✓',
+    },
+    mentions,
+    link,
+    'View Shoot →',
+  );
+  await postToSlack(webhookUrl, `💵 Payment completed for ${shoot.name}`, blocks);
 }
