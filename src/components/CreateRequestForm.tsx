@@ -35,19 +35,25 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   const [approvalEmails, setApprovalEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
 
-  // Slack notify mentions — seeded from RolePanel localStorage
+  // Slack notify mentions — loaded from Slack Integration Settings
   const [slackNotifyNames, setSlackNotifyNames] = useState<string[]>([]);
   const [slackNameInput, setSlackNameInput] = useState('');
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  // { label: 'Ankush Chaudhary', slack_id: 'U012AB3CD' }
+  const [slackConfiguredMembers, setSlackConfiguredMembers] = useState<{ label: string; slack_id: string }[]>([]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('shootflow_local_users');
-      if (raw) {
-        const users: { name: string }[] = JSON.parse(raw);
-        setTeamMembers(users.map(u => u.name).filter(Boolean));
-      }
-    } catch { /* ignore */ }
+    // Load configured Slack mentions from backend settings
+    const API_URL = import.meta.env.DEV
+      ? 'http://localhost:3001'
+      : 'https://divine-nature-production-c49a.up.railway.app';
+    fetch(`${API_URL}/api/slack/settings`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.mentions?.length) {
+          setSlackConfiguredMembers(data.mentions.filter((m: any) => m.label));
+        }
+      })
+      .catch(() => { /* ignore — non-critical */ });
   }, []);
   
   // Add New Equipment Modal state
@@ -426,7 +432,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
         multiShootIndex: index,
         totalShootsInRequest: shoots.length,
         requestGroupId,
-        slackMentions: slackNotifyNames.map(name => ({ label: name, slack_id: '' })),
+        slackMentions: slackNotifyNames.map(name => {
+          const configured = slackConfiguredMembers.find(m => m.label === name);
+          return { label: name, slack_id: configured?.slack_id || '' };
+        }),
       }));
 
       console.log('Submitting data:', shoots.length === 1 ? 'single shoot' : `${shoots.length} shoots`);
@@ -701,23 +710,25 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                 <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-yellow-500" />
                   Notify on Slack
-                  <span className="text-gray-400 ml-1">({teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''} in team)</span>
+                  {slackConfiguredMembers.length > 0
+                    ? <span className="text-gray-400 ml-1">({slackConfiguredMembers.length} configured)</span>
+                    : <span className="text-gray-400 ml-1">(type a name & press Enter)</span>}
                 </label>
 
-                {/* Team member quick-pick buttons */}
-                {teamMembers.length > 0 && (
+                {/* Configured Slack members — quick-pick buttons */}
+                {slackConfiguredMembers.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {teamMembers.map(name => {
-                      const selected = slackNotifyNames.includes(name);
+                    {slackConfiguredMembers.map(m => {
+                      const selected = slackNotifyNames.includes(m.label);
                       return (
                         <button
-                          key={name}
+                          key={m.label}
                           type="button"
                           onClick={() => {
                             if (selected) {
-                              setSlackNotifyNames(p => p.filter(n => n !== name));
+                              setSlackNotifyNames(p => p.filter(n => n !== m.label));
                             } else {
-                              setSlackNotifyNames(p => [...p, name]);
+                              setSlackNotifyNames(p => [...p, m.label]);
                             }
                           }}
                           className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
@@ -726,12 +737,12 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                               : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-yellow-50 hover:border-yellow-300'
                           }`}
                         >
-                          {selected ? '✓ ' : '+ '}@{name}
+                          {selected ? '✓ ' : '+ '}@{m.label}
                         </button>
                       );
                     })}
                   </div>
-                )}
+                ) : null}
 
                 {/* Selected chips + manual input */}
                 <div className="w-full min-h-[38px] px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-yellow-400 text-sm flex flex-wrap gap-1.5 items-center bg-white">
