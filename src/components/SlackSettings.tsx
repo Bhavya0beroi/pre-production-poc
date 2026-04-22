@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 import {
+  testSlackConnection,
   getSlackSettings,
   saveSlackSettings,
   sendSlackNotification,
@@ -117,22 +118,22 @@ export function SlackSettings({
       return;
     }
     setTesting(true);
-    const ok = await sendSlackNotification(
-      settings.webhook_url,
-      {
-        shootName: 'Test Shoot — Connection Verified',
-        dates: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-        requestorName: 'ShootFlow',
-      },
-      settings.mentions
-    );
+    const { ok, error } = await testSlackConnection(settings.webhook_url);
     setTesting(false);
     if (ok) {
-      showToast('success', 'Test message sent to Slack!');
+      showToast('success', 'Test message sent to Slack! ✅');
       addAlert('Test connection — message delivered to Slack', 'success');
     } else {
-      showToast('error', 'Failed to deliver. Check your Webhook URL.');
-      addAlert('Test connection failed — invalid webhook or network error', 'error');
+      // Show the exact error Slack returned so user knows what to fix
+      const detail = error?.includes('no_service')
+        ? 'Webhook URL is invalid or has been revoked. Please generate a new one from api.slack.com/apps.'
+        : error?.includes('channel_not_found')
+        ? 'Channel not found. Make sure the Slack app is added to the channel.'
+        : error?.includes('HTTP 4')
+        ? `Slack rejected the request: ${error}. Try regenerating the webhook.`
+        : error || 'Unknown error. Check the webhook URL.';
+      showToast('error', `Failed: ${detail}`);
+      addAlert(`Test failed — ${detail}`, 'error');
     }
   };
 

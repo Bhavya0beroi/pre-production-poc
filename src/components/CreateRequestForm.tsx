@@ -35,9 +35,20 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   const [approvalEmails, setApprovalEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
 
-  // Slack notify mentions
+  // Slack notify mentions — seeded from RolePanel localStorage
   const [slackNotifyNames, setSlackNotifyNames] = useState<string[]>([]);
   const [slackNameInput, setSlackNameInput] = useState('');
+  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('shootflow_local_users');
+      if (raw) {
+        const users: { name: string }[] = JSON.parse(raw);
+        setTeamMembers(users.map(u => u.name).filter(Boolean));
+      }
+    } catch { /* ignore */ }
+  }, []);
   
   // Add New Equipment Modal state
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
@@ -690,8 +701,39 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                 <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
                   <Zap className="w-3 h-3 text-yellow-500" />
                   Notify on Slack
-                  <span className="text-gray-400 ml-1">(type a name & press Enter)</span>
+                  <span className="text-gray-400 ml-1">({teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''} in team)</span>
                 </label>
+
+                {/* Team member quick-pick buttons */}
+                {teamMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {teamMembers.map(name => {
+                      const selected = slackNotifyNames.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            if (selected) {
+                              setSlackNotifyNames(p => p.filter(n => n !== name));
+                            } else {
+                              setSlackNotifyNames(p => [...p, name]);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            selected
+                              ? 'bg-yellow-400 text-yellow-900 border-yellow-500'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-yellow-50 hover:border-yellow-300'
+                          }`}
+                        >
+                          {selected ? '✓ ' : '+ '}@{name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Selected chips + manual input */}
                 <div className="w-full min-h-[38px] px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-yellow-400 text-sm flex flex-wrap gap-1.5 items-center bg-white">
                   {slackNotifyNames.map((name, i) => (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-100 text-yellow-800 border border-yellow-300">
@@ -715,7 +757,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                         setSlackNotifyNames(p => p.slice(0, -1));
                       }
                     }}
-                    placeholder={slackNotifyNames.length === 0 ? 'e.g. Bhavya, Riya' : ''}
+                    placeholder={slackNotifyNames.length === 0 ? 'Or type a name & press Enter' : ''}
                     className="flex-1 min-w-[120px] outline-none bg-transparent text-sm"
                   />
                 </div>

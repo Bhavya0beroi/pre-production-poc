@@ -1627,8 +1627,8 @@ function AppContent() {
             shootId: newShoot.id,
           },
           allMentions
-        ).catch(() => {
-          // Slack notification failure is non-critical
+        ).catch((_err) => {
+          // Slack notification failure is non-critical — do not block the request submission
         });
       }
     });

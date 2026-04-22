@@ -152,8 +152,33 @@ export async function sendSlackNotification(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhook_url: webhookUrl, blocks }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.details || err.error || `HTTP ${res.status}`);
+    }
+    return true;
+  } catch (e: any) {
+    // Re-throw so callers can show the actual Slack error
+    throw e;
+  }
+}
+
+/** Same as sendSlackNotification but returns { ok, error } instead of throwing */
+export async function testSlackConnection(
+  webhookUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await sendSlackNotification(
+      webhookUrl,
+      {
+        shootName: 'Test — Connection Verified ✅',
+        dates: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+        requestorName: 'ShootFlow',
+      },
+      [],
+    );
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Unknown error' };
   }
 }
