@@ -146,11 +146,14 @@ export async function sendSlackNotification(
     },
   );
 
+  // Plain-text fallback required by Slack alongside blocks
+  const fallbackText = `🔔 New shoot request: ${shoot.shootName} — by ${shoot.requestorName}`;
+
   try {
     const res = await fetch(`${API_URL}/api/slack/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhook_url: webhookUrl, blocks }),
+      body: JSON.stringify({ webhook_url: webhookUrl, blocks, text: fallbackText }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -163,20 +166,20 @@ export async function sendSlackNotification(
   }
 }
 
-/** Same as sendSlackNotification but returns { ok, error } instead of throwing */
+/** Uses the simple /api/slack/test endpoint (plain text, no blocks) to verify the webhook */
 export async function testSlackConnection(
   webhookUrl: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    await sendSlackNotification(
-      webhookUrl,
-      {
-        shootName: 'Test — Connection Verified ✅',
-        dates: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-        requestorName: 'ShootFlow',
-      },
-      [],
-    );
+    const res = await fetch(`${API_URL}/api/slack/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webhook_url: webhookUrl }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.details || err.error || `HTTP ${res.status}`);
+    }
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Unknown error' };

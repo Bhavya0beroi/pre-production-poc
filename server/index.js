@@ -775,13 +775,64 @@ async function initDatabase() {
       console.log('⚠️  Migration warning (can be ignored if column exists):', migrationError.message);
     }
 
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        email TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'super_admin')),
+        department TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Create slack_settings table (single-row config)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS slack_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        webhook_url TEXT DEFAULT '',
+        mentions JSONB DEFAULT '[]'::jsonb,
+        notifications JSONB DEFAULT '{
+          "payment_due_7days": true,
+          "payment_due_1day": true,
+          "invoice_uploaded": true,
+          "request_submitted": true,
+          "request_approved_rejected": true
+        }'::jsonb,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT single_row CHECK (id = 1)
+      )
+    `);
+
+    // Seed initial slack_settings row if not present
+    await pool.query(`
+      INSERT INTO slack_settings (id) VALUES (1)
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    // Seed initial users if table is empty
+    const usersCount = await pool.query('SELECT COUNT(*) FROM users');
+    if (parseInt(usersCount.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO users (email, name, password, role, department) VALUES
+          ('bhavya.oberoi@learnapp.co', 'Bhavya Oberoi', 'Learnapp@123', 'super_admin', 'Product'),
+          ('admin@learnapp.com', 'Admin', '123456', 'admin', 'Product'),
+          ('preproduction@learnapp.com', 'ShootFlow Team', '123456', 'user', 'Production')
+        ON CONFLICT (email) DO NOTHING
+      `);
+      console.log('✅ Seeded initial users');
+    }
+
     // Check if we have any data
     const shootsCount = await pool.query('SELECT COUNT(*) FROM shoots');
     const catalogCount = await pool.query('SELECT COUNT(*) FROM catalog_items');
+    const usersTotal = await pool.query('SELECT COUNT(*) FROM users');
     
     console.log('✅ Database tables initialized');
     console.log('   - Shoots:', shootsCount.rows[0].count);
     console.log('   - Catalog items:', catalogCount.rows[0].count);
+    console.log('   - Users:', usersTotal.rows[0].count);
     
     return true;
   } catch (error) {
@@ -1286,6 +1337,220 @@ app.get('/api/email/status', (req, res) => {
     smtpUser: (process.env.SMTP_USER || 'bhavya.oberoi@learnapp.com').replace(/(.{3}).*(@.*)/, '$1***$2'),
     templates: Object.keys(emailTemplates)
   });
+});
+
+// ============================================
+// AUTH ROUTES
+// ============================================
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+    const result = await pool.query(
+      'SELECT email, name, role, department FROM users WHERE email = $1 AND password = $2',
+      [email.toLowerCase().trim(), password]
+    );
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    res.json({ success: true, user: result.rows[0] });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed', details: error.message });
+  }
+});
+
+// ============================================
+// USER MANAGEMENT ROUTES
+// ============================================
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT email, name, role, department, created_at FROM users ORDER BY created_at ASC'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: 'Failed to fetch users', details: error.message });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const { email, name, password, role = 'user', department = '' } = req.body;
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'email, name, and password are required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO users (email, name, password, role, department)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING email, name, role, department, created_at`,
+      [email.toLowerCase().trim(), name, password, role, department]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+    console.error('Create user error:', error);
+    res.status(500).json({ error: 'Failed to create user', details: error.message });
+  }
+});
+
+app.patch('/api/users/:email/role', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { role } = req.body;
+    if (!['user', 'admin', 'super_admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be user, admin, or super_admin' });
+    }
+    const result = await pool.query(
+      'UPDATE users SET role = $1 WHERE email = $2 RETURNING email, name, role, department',
+      [role, email.toLowerCase()]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update role error:', error);
+    res.status(500).json({ error: 'Failed to update role', details: error.message });
+  }
+});
+
+app.patch('/api/users/:email/password', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    const result = await pool.query(
+      'UPDATE users SET password = $1 WHERE email = $2 RETURNING email, name',
+      [password, email.toLowerCase()]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Update password error:', error);
+    res.status(500).json({ error: 'Failed to update password', details: error.message });
+  }
+});
+
+app.delete('/api/users/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const result = await pool.query(
+      'DELETE FROM users WHERE email = $1 RETURNING email',
+      [email.toLowerCase()]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user', details: error.message });
+  }
+});
+
+// ============================================
+// SLACK INTEGRATION ROUTES
+// ============================================
+
+app.get('/api/slack/settings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT webhook_url, mentions, notifications FROM slack_settings WHERE id = 1');
+    if (result.rows.length === 0) {
+      return res.json({ webhook_url: '', mentions: [], notifications: {} });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get slack settings error:', error);
+    res.status(500).json({ error: 'Failed to fetch Slack settings', details: error.message });
+  }
+});
+
+app.post('/api/slack/settings', async (req, res) => {
+  try {
+    const { webhook_url, mentions, notifications } = req.body;
+    await pool.query(
+      `INSERT INTO slack_settings (id, webhook_url, mentions, notifications, updated_at)
+       VALUES (1, $1, $2, $3, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         webhook_url = EXCLUDED.webhook_url,
+         mentions = EXCLUDED.mentions,
+         notifications = EXCLUDED.notifications,
+         updated_at = NOW()`,
+      [webhook_url || '', JSON.stringify(mentions || []), JSON.stringify(notifications || {})]
+    );
+    res.json({ success: true, message: 'Slack settings saved' });
+  } catch (error) {
+    console.error('Save slack settings error:', error);
+    res.status(500).json({ error: 'Failed to save Slack settings', details: error.message });
+  }
+});
+
+app.post('/api/slack/notify', async (req, res) => {
+  try {
+    const { webhook_url, message, blocks, text } = req.body;
+    if (!webhook_url) {
+      return res.status(400).json({ error: 'webhook_url is required' });
+    }
+
+    // Always include a text fallback — Slack requires it alongside blocks
+    // for notifications and message previews.
+    const fallbackText = text || message || 'New ShootFlow notification';
+    const payload = blocks
+      ? { text: fallbackText, blocks }
+      : { text: fallbackText };
+
+    const response = await fetch(webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const slackError = await response.text();
+      console.error('Slack webhook error:', response.status, slackError);
+      throw new Error(`Slack responded with ${response.status}: ${slackError}`);
+    }
+
+    res.json({ success: true, message: 'Slack notification sent' });
+  } catch (error) {
+    console.error('Slack notify error:', error);
+    res.status(500).json({ error: 'Failed to send Slack notification', details: error.message });
+  }
+});
+
+// Simple Slack connection test — sends plain text only (no blocks)
+app.post('/api/slack/test', async (req, res) => {
+  try {
+    const { webhook_url } = req.body;
+    if (!webhook_url) {
+      return res.status(400).json({ error: 'webhook_url is required' });
+    }
+    const response = await fetch(webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '✅ ShootFlow is connected to this Slack channel!' }),
+    });
+    if (!response.ok) {
+      const slackError = await response.text();
+      throw new Error(`Slack responded with ${response.status}: ${slackError}`);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Slack test error:', error);
+    res.status(500).json({ error: 'Test failed', details: error.message });
+  }
 });
 
 // Start server
