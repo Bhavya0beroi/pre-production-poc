@@ -10,7 +10,9 @@ import {
   Eye,
   X,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Zap,
+  Users,
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +23,8 @@ interface ArchiveScreenProps {
   onOpenApprovals: () => void;
   onOpenFinance: () => void;
   onOpenCatalog: () => void;
+  onOpenSlackSettings?: () => void;
+  onOpenRolePanel?: () => void;
   onRestoreShoot?: (shootId: string) => void;
   onDeletePermanently?: (shootId: string) => void;
   approvalsPending?: number;
@@ -36,9 +40,11 @@ export function ArchiveScreen({
   onOpenCatalog,
   onRestoreShoot,
   onDeletePermanently,
-  approvalsPending = 0
+  approvalsPending = 0,
+  onOpenSlackSettings,
+  onOpenRolePanel,
 }: ArchiveScreenProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin } = useAuth();
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -203,6 +209,29 @@ export function ArchiveScreen({
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
+
+          {isAdmin && onOpenSlackSettings && (
+            <button
+              onClick={onOpenSlackSettings}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Zap className="w-5 h-5" />
+              <span>Slack Integration</span>
+            </button>
+          )}
+
+          {onOpenRolePanel && (
+            <button
+              onClick={onOpenRolePanel}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Users className="w-5 h-5" />
+              <span>Role Panel</span>
+            </button>
+          )}
+
         </nav>
 
         {/* User Profile */}

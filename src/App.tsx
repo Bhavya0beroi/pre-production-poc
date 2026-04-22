@@ -11,8 +11,11 @@ import { NotificationToast, EmailThreadModal, EmailSentModal, type Notification,
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
+import { RolePanel } from './components/RolePanel';
+import { SlackSettings } from './components/SlackSettings';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DEFAULT_RECIPIENTS } from './services/emailService';
+import { getSlackSettings, sendSlackNotification } from './services/slackService';
 
 // API URL Configuration
 // In production (Railway), use the production API
@@ -83,7 +86,7 @@ export interface Shoot {
   totalShootsInRequest?: number;
 }
 
-export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot';
+export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot' | 'role_panel' | 'slack_settings';
 
 // LocalStorage keys - v2 to clear old data
 const STORAGE_KEYS = {
@@ -140,7 +143,7 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 };
 
 function AppContent() {
-  const { isAuthenticated, isAdmin, user, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, user, logout } = useAuth();
   
   // Check if this is a vendor link (opens form only) - vendors don't need login
   const urlParams = new URLSearchParams(window.location.search);
@@ -1588,6 +1591,47 @@ function AppContent() {
         }
       );
     }, 300);
+
+    // Trigger Slack notification (fire-and-forget)
+    getSlackSettings().then(slackSettings => {
+      if (slackSettings.webhook_url && slackSettings.notifications.request_submitted) {
+        // Merge global mentions with per-submit mentions from the form
+        const perSubmitMentions: { label: string; slack_id: string }[] =
+          requestData.slackMentions || [];
+        const allMentions = [
+          ...slackSettings.mentions,
+          ...perSubmitMentions.filter(
+            pm => !slackSettings.mentions.some(m => m.label === pm.label)
+          ),
+        ];
+
+        const estimatedBudget = requestData.equipment?.reduce(
+          (sum: number, item: any) =>
+            sum + (item.dailyRate || 0) * (item.quantity || 1) * (item.days || 1),
+          0
+        ) ?? requestData.totalBudget ?? 0;
+
+        sendSlackNotification(
+          slackSettings.webhook_url,
+          {
+            shootName: requestData.shootName,
+            dates: dateStr,
+            requestorName: requestData.requestorName || 'Pre-Production Team',
+            equipment: requestData.equipment?.map((item: any) => ({
+              name: item.name,
+              quantity: item.quantity || 1,
+              dailyRate: item.dailyRate || 0,
+              days: item.days || 1,
+            })),
+            estimatedBudget,
+            shootId: newShoot.id,
+          },
+          allMentions
+        ).catch(() => {
+          // Slack notification failure is non-critical
+        });
+      }
+    });
   };
 
   // Find selected shoot - check both by ID and by requestGroupId (for multi-shoot vendor links)
@@ -1620,8 +1664,11 @@ function AppContent() {
           onOpenFinance={() => setViewMode('finance')}
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
           // Auth props
           isAdmin={isAdmin}
+          isSuperAdmin={isSuperAdmin}
           userName={user?.name}
           userEmail={user?.email}
           onLogout={logout}
@@ -1679,6 +1726,8 @@ function AppContent() {
           onOpenFinance={() => setViewMode('finance')}
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
           isAdmin={isAdmin}
         />
       )}
@@ -1722,6 +1771,8 @@ function AppContent() {
           onOpenApprovals={() => setViewMode('approval')}
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
         />
       )}
 
@@ -1733,6 +1784,8 @@ function AppContent() {
           onOpenApprovals={() => setViewMode('approval')}
           onOpenFinance={() => setViewMode('finance')}
           onOpenArchive={() => setViewMode('archive')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
           approvalsPending={pendingApprovals.length}
         />
       )}
@@ -1744,6 +1797,8 @@ function AppContent() {
           onOpenApprovals={() => setViewMode('approval')}
           onOpenFinance={() => setViewMode('finance')}
           onOpenCatalog={() => setViewMode('catalog')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
           approvalsPending={pendingApprovals.length}
         />
       )}
@@ -1789,6 +1844,31 @@ function AppContent() {
             setViewMode('dashboard');
             setSelectedShootId(null);
           }}
+        />
+      )}
+
+      {viewMode === 'role_panel' && (
+        <RolePanel
+          onBack={() => setViewMode('dashboard')}
+          currentUserEmail={user?.email || ''}
+          onOpenApprovals={() => setViewMode('approval')}
+          onOpenFinance={() => setViewMode('finance')}
+          onOpenCatalog={() => setViewMode('catalog')}
+          onOpenArchive={() => setViewMode('archive')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          approvalsPending={pendingApprovals.length}
+        />
+      )}
+
+      {viewMode === 'slack_settings' && isAdmin && (
+        <SlackSettings
+          onBack={() => setViewMode('dashboard')}
+          onOpenApprovals={() => setViewMode('approval')}
+          onOpenFinance={() => setViewMode('finance')}
+          onOpenCatalog={() => setViewMode('catalog')}
+          onOpenArchive={() => setViewMode('archive')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
+          approvalsPending={pendingApprovals.length}
         />
       )}
 

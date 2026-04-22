@@ -14,13 +14,17 @@ import {
   Calendar,
   TrendingUp,
   BarChart3,
-  List
+  List,
+  Zap,
+  Users
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
 
 interface FinanceDashboardProps {
+  onOpenSlackSettings?: () => void;
+  onOpenRolePanel?: () => void;
   shoots: Shoot[];
   onBack: () => void;
   onUploadInvoice: (shootId: string) => void;
@@ -33,11 +37,11 @@ type FilterTab = 'all' | 'paid' | 'pending';
 type ViewMode = 'list' | 'chart';
 type ChartView = 'monthly' | 'daily';
 
-export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive }: FinanceDashboardProps) {
+export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRolePanel }: FinanceDashboardProps) {
   // Debug log
   console.log('📊 FinanceDashboard received', shoots?.length || 0, 'shoots');
   
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin } = useAuth();
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -630,6 +634,21 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
+
+          {isAdmin && onOpenSlackSettings && (
+            <button onClick={onOpenSlackSettings} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Zap className="w-5 h-5" />
+              <span>Slack Integration</span>
+            </button>
+          )}
+
+          {onOpenRolePanel && (
+            <button onClick={onOpenRolePanel} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Users className="w-5 h-5" />
+              <span>Role Panel</span>
+            </button>
+          )}
+
         </nav>
 
         <div className="px-4 py-6 border-t" style={{ borderColor: '#374151' }}>

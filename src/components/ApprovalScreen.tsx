@@ -10,7 +10,9 @@ import {
   XCircle,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  Zap,
+  Users
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +20,8 @@ import { useAuth } from '../context/AuthContext';
 interface ApprovalScreenProps {
   shoots: Shoot[];
   allShoots: Shoot[];
+  onOpenSlackSettings?: () => void;
+  onOpenRolePanel?: () => void;
   onApprove: (shootId: string) => Promise<void> | void;
   onReject: (shootId: string, reason: string) => Promise<void> | void;
   onBack: () => void;
@@ -29,8 +33,8 @@ interface ApprovalScreenProps {
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
-export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false }: ApprovalScreenProps) {
-  const { user } = useAuth();
+export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false, onOpenSlackSettings, onOpenRolePanel }: ApprovalScreenProps) {
+  const { user, isSuperAdmin } = useAuth();
   const [filterTab, setFilterTab] = useState<FilterTab>('pending');
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
   const [relatedShoots, setRelatedShoots] = useState<Shoot[]>([]);
@@ -341,6 +345,29 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
+
+          {isAdmin && onOpenSlackSettings && (
+            <button
+              onClick={onOpenSlackSettings}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Zap className="w-5 h-5" />
+              <span>Slack Integration</span>
+            </button>
+          )}
+
+          {onOpenRolePanel && (
+            <button
+              onClick={onOpenRolePanel}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Users className="w-5 h-5" />
+              <span>Role Panel</span>
+            </button>
+          )}
+
         </nav>
 
         {/* User Profile */}

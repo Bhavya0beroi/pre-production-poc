@@ -14,10 +14,7 @@ export function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    // Simulate a small delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const success = login(email, password);
+    const success = await login(email, password);
     
     if (!success) {
       setError('Invalid email or password. Please try again.');

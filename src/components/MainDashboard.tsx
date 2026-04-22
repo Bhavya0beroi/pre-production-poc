@@ -15,6 +15,9 @@ import {
   LogOut,
   User,
   Shield,
+  Crown,
+  Zap,
+  Users,
   Edit3
 } from 'lucide-react';
 import type { Shoot } from '../App';
@@ -29,8 +32,11 @@ interface MainDashboardProps {
   onOpenFinance: () => void;
   onOpenCatalog: () => void;
   onOpenArchive: () => void;
+  onOpenRolePanel?: () => void;
+  onOpenSlackSettings?: () => void;
   // Auth props
   isAdmin?: boolean;
+  isSuperAdmin?: boolean;
   userName?: string;
   userEmail?: string;
   onLogout?: () => void;
@@ -50,7 +56,10 @@ export function MainDashboard({
   onOpenFinance,
   onOpenCatalog,
   onOpenArchive,
+  onOpenRolePanel,
+  onOpenSlackSettings,
   isAdmin = false,
+  isSuperAdmin = false,
   userName = 'User',
   userEmail = '',
   onLogout,
@@ -408,6 +417,30 @@ export function MainDashboard({
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
+
+          {/* Slack Integration — visible to admin and super_admin */}
+          {isAdmin && onOpenSlackSettings && (
+            <button
+              onClick={onOpenSlackSettings}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Zap className="w-5 h-5" />
+              <span>Slack Integration</span>
+            </button>
+          )}
+
+          {onOpenRolePanel && (
+            <button
+              onClick={onOpenRolePanel}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Users className="w-5 h-5" />
+              <span>Role Panel</span>
+            </button>
+          )}
+
         </nav>
 
         {/* User Profile */}
@@ -415,16 +448,18 @@ export function MainDashboard({
           <div className="flex items-center gap-3 px-2 mb-3">
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0"
-              style={{ backgroundColor: isAdmin ? '#8B5CF6' : '#2D60FF' }}
+              style={{ backgroundColor: isSuperAdmin ? '#C2410C' : isAdmin ? '#8B5CF6' : '#2D60FF' }}
             >
-              {isAdmin ? <Shield className="w-5 h-5" /> : <User className="w-5 h-5" />}
+              {isSuperAdmin ? <Crown className="w-5 h-5" /> : isAdmin ? <Shield className="w-5 h-5" /> : <User className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-white text-sm font-medium truncate">
-                {isAdmin ? 'Admin' : 'Pre-production Team'}
+                {userName || (isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : 'Pre-production Team')}
               </div>
               <div className="text-gray-400 text-xs flex items-center gap-1">
-                {isAdmin ? (
+                {isSuperAdmin ? (
+                  <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-300 rounded text-xs">Super Admin</span>
+                ) : isAdmin ? (
                   <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">Administrator</span>
                 ) : (
                   <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">Team Member</span>

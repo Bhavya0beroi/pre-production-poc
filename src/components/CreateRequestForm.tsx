@@ -34,6 +34,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   const [requestorName, setRequestorName] = useState('');
   const [approvalEmails, setApprovalEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
+
+  // Slack notify mentions
+  const [slackNotifyNames, setSlackNotifyNames] = useState<string[]>([]);
+  const [slackNameInput, setSlackNameInput] = useState('');
   
   // Add New Equipment Modal state
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false);
@@ -411,6 +415,7 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
         multiShootIndex: index,
         totalShootsInRequest: shoots.length,
         requestGroupId,
+        slackMentions: slackNotifyNames.map(name => ({ label: name, slack_id: '' })),
       }));
 
       console.log('Submitting data:', shoots.length === 1 ? 'single shoot' : `${shoots.length} shoots`);
@@ -677,6 +682,42 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                       className="flex-1 min-w-[140px] outline-none bg-transparent"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Slack Notify row */}
+              <div className="mt-3">
+                <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-yellow-500" />
+                  Notify on Slack
+                  <span className="text-gray-400 ml-1">(type a name & press Enter)</span>
+                </label>
+                <div className="w-full min-h-[38px] px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-yellow-400 text-sm flex flex-wrap gap-1.5 items-center bg-white">
+                  {slackNotifyNames.map((name, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-yellow-100 text-yellow-800 border border-yellow-300">
+                      @{name}
+                      <button type="button" onClick={() => setSlackNotifyNames(p => p.filter((_, idx) => idx !== i))} className="hover:bg-yellow-200 rounded-full p-0.5">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={slackNameInput}
+                    onChange={e => setSlackNameInput(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ',') && slackNameInput.trim()) {
+                        e.preventDefault();
+                        const name = slackNameInput.trim().replace(/^@/, '');
+                        if (name && !slackNotifyNames.includes(name)) setSlackNotifyNames(p => [...p, name]);
+                        setSlackNameInput('');
+                      } else if (e.key === 'Backspace' && slackNameInput === '' && slackNotifyNames.length > 0) {
+                        setSlackNotifyNames(p => p.slice(0, -1));
+                      }
+                    }}
+                    placeholder={slackNotifyNames.length === 0 ? 'e.g. Bhavya, Riya' : ''}
+                    className="flex-1 min-w-[120px] outline-none bg-transparent text-sm"
+                  />
                 </div>
               </div>
               </div>

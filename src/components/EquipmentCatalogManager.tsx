@@ -9,7 +9,9 @@ import {
   Plus, 
   Edit2, 
   Trash2, 
-  X 
+  X,
+  Zap,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,6 +31,8 @@ interface EquipmentCatalogManagerProps {
   onOpenFinance: () => void;
   onOpenArchive: () => void;
   approvalsPending?: number;
+  onOpenSlackSettings?: () => void;
+  onOpenRolePanel?: () => void;
 }
 
 export function EquipmentCatalogManager({ 
@@ -38,9 +42,11 @@ export function EquipmentCatalogManager({
   onOpenApprovals,
   onOpenFinance,
   onOpenArchive,
-  approvalsPending = 0
+  approvalsPending = 0,
+  onOpenSlackSettings,
+  onOpenRolePanel,
 }: EquipmentCatalogManagerProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -222,6 +228,29 @@ export function EquipmentCatalogManager({
             <Archive className="w-5 h-5" />
             <span>Archive</span>
           </button>
+
+          {isAdmin && onOpenSlackSettings && (
+            <button
+              onClick={onOpenSlackSettings}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Zap className="w-5 h-5" />
+              <span>Slack Integration</span>
+            </button>
+          )}
+
+          {onOpenRolePanel && (
+            <button
+              onClick={onOpenRolePanel}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Users className="w-5 h-5" />
+              <span>Role Panel</span>
+            </button>
+          )}
+
         </nav>
 
         {/* User Profile */}
