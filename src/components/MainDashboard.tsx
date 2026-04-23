@@ -354,74 +354,54 @@ export function MainDashboard({
   const getActionButton = (shoot: Shoot) => {
     if (shoot.status === 'pending_invoice') {
       return (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onOpenInvoice(shoot.id)}
-            className="px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm font-medium hover:bg-orange-50 whitespace-nowrap"
-            style={{ borderColor: '#F2994A', color: '#F2994A' }}
-          >
-            <Upload className="w-4 h-4" />
-            Upload Invoice
-          </button>
-          {editBtn(shoot)}
-        </div>
+        <button
+          onClick={() => onOpenInvoice(shoot.id)}
+          className="px-4 py-2 rounded-lg border-2 transition-colors flex items-center gap-2 text-sm font-medium hover:bg-orange-50 whitespace-nowrap"
+          style={{ borderColor: '#F2994A', color: '#F2994A' }}
+        >
+          <Upload className="w-4 h-4" />
+          Upload Invoice
+        </button>
       );
     }
-    
     if (shoot.status === 'with_swati') {
       return (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenApprovals}
-            className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
-            style={{ backgroundColor: '#2D60FF' }}
-          >
-            Review for Approval
-          </button>
-          {editBtn(shoot)}
-        </div>
+        <button
+          onClick={onOpenApprovals}
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
+          style={{ backgroundColor: '#2D60FF' }}
+        >
+          Review for Approval
+        </button>
       );
     }
-    
     if (shoot.status === 'with_vendor') {
       return (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onOpenVendorLink(shoot.id)}
-            className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
-            style={{ backgroundColor: '#2D60FF' }}
-          >
-            Send to Vendor
-          </button>
-          {editBtn(shoot)}
-        </div>
+        <button
+          onClick={() => onOpenVendorLink(shoot.id)}
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
+          style={{ backgroundColor: '#2D60FF' }}
+        >
+          Send to Vendor
+        </button>
       );
     }
-
     if (shoot.status === 'new_request') {
       return (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onOpenVendorLink(shoot.id)}
-            className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
-            style={{ backgroundColor: '#2D60FF' }}
-          >
-            Send to Vendor
-          </button>
-          {editBtn(shoot)}
-        </div>
+        <button
+          onClick={() => onOpenVendorLink(shoot.id)}
+          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
+          style={{ backgroundColor: '#2D60FF' }}
+        >
+          Send to Vendor
+        </button>
       );
     }
-
     if (shoot.status === 'ready_for_shoot') {
       return (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap" style={{ backgroundColor: '#E8F5E9', color: '#27AE60' }}>Active Shoot</span>
-          {editBtn(shoot)}
-        </div>
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap" style={{ backgroundColor: '#E8F5E9', color: '#27AE60' }}>Active Shoot</span>
       );
     }
-
     return null;
   };
 
@@ -644,8 +624,9 @@ export function MainDashboard({
                     {selectedFilter === 'approvals_pending' && (
                       <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[12%]">Total Quote</th>
                     )}
-                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[15%]">Status</th>
-                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[22%]">Action</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[13%]">Status</th>
+                    <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[20%]">Action</th>
+                    {isAdmin && <th className="px-3 py-3 text-center text-sm text-gray-700 font-medium w-[8%]">Edit</th>}
                     {isAdmin && <th className="px-3 py-3 text-center text-sm text-gray-700 font-medium w-[6%]">Notify</th>}
                   </tr>
                 </thead>
@@ -690,6 +671,20 @@ export function MainDashboard({
                             {getActionButton(shoot)}
                           </div>
                         </td>
+                        {isAdmin && (
+                          <td className="px-3 py-4 text-center">
+                            {canEdit(shoot) ? (
+                              <button
+                                onClick={() => onEditShoot!(shoot.id)}
+                                className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors flex items-center gap-1 text-sm whitespace-nowrap mx-auto"
+                                title="Edit shoot (Admin only)"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                            ) : null}
+                          </td>
+                        )}
                         {isAdmin && (
                           <td className="px-3 py-4 text-center relative">
                             <div ref={notifyOpenFor === shoot.id ? notifyRef : undefined} className="relative inline-block">

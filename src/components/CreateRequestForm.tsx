@@ -41,6 +41,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   // { label: 'Ankush Chaudhary', slack_id: 'U012AB3CD' }
   const [slackConfiguredMembers, setSlackConfiguredMembers] = useState<{ label: string; slack_id: string }[]>([]);
 
+  // Separate "Tag for Approval" — only sent when quote arrives from vendor
+  const [approvalTagName, setApprovalTagName] = useState('');    // single person
+  const [approvalTagInput, setApprovalTagInput] = useState('');
+
   useEffect(() => {
     // Load configured Slack mentions from backend settings
     const API_URL = import.meta.env.DEV
@@ -436,6 +440,12 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
           const configured = slackConfiguredMembers.find(m => m.label === name);
           return { label: name, slack_id: configured?.slack_id || '' };
         }),
+        slackApprovalMentions: approvalTagName
+          ? (() => {
+              const configured = slackConfiguredMembers.find(m => m.label === approvalTagName);
+              return [{ label: approvalTagName, slack_id: configured?.slack_id || '' }];
+            })()
+          : [],
       }));
 
       console.log('Submitting data:', shoots.length === 1 ? 'single shoot' : `${shoots.length} shoots`);
@@ -771,6 +781,65 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                     placeholder={slackNotifyNames.length === 0 ? 'Or type a name & press Enter' : ''}
                     className="flex-1 min-w-[120px] outline-none bg-transparent text-sm"
                   />
+                </div>
+              </div>
+
+              {/* Tag for Approval — separate person notified only when vendor quote arrives */}
+              <div className="mt-3">
+                <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                  <span className="text-orange-500 font-bold text-xs">✓</span>
+                  Tag for Approval
+                  <span className="text-gray-400 ml-1">(notified when quote is received)</span>
+                </label>
+
+                {/* Quick-pick from configured members */}
+                {slackConfiguredMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {slackConfiguredMembers.map(m => {
+                      const selected = approvalTagName === m.label;
+                      return (
+                        <button
+                          key={m.label}
+                          type="button"
+                          onClick={() => setApprovalTagName(selected ? '' : m.label)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            selected
+                              ? 'bg-orange-400 text-white border-orange-500'
+                              : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-orange-50 hover:border-orange-300'
+                          }`}
+                        >
+                          {selected ? '✓ ' : '+ '}@{m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Manual input / selected chip */}
+                <div className="w-full min-h-[38px] px-3 py-1.5 border border-orange-200 rounded-lg focus-within:ring-2 focus-within:ring-orange-300 text-sm flex flex-wrap gap-1.5 items-center bg-white">
+                  {approvalTagName ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-orange-100 text-orange-800 border border-orange-300">
+                      @{approvalTagName}
+                      <button type="button" onClick={() => setApprovalTagName('')} className="hover:bg-orange-200 rounded-full p-0.5">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ) : (
+                    <input
+                      type="text"
+                      value={approvalTagInput}
+                      onChange={e => setApprovalTagInput(e.target.value)}
+                      onKeyDown={e => {
+                        if ((e.key === 'Enter' || e.key === ',') && approvalTagInput.trim()) {
+                          e.preventDefault();
+                          setApprovalTagName(approvalTagInput.trim().replace(/^@/, ''));
+                          setApprovalTagInput('');
+                        }
+                      }}
+                      placeholder="Type approver name & press Enter"
+                      className="flex-1 min-w-[160px] outline-none bg-transparent text-sm"
+                    />
+                  )}
                 </div>
               </div>
               </div>

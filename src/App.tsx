@@ -92,6 +92,8 @@ export interface Shoot {
   isMultiShoot?: boolean;
   multiShootIndex?: number;
   totalShootsInRequest?: number;
+  // Per-shoot Slack approval reviewer (set at request creation time)
+  slackApprovalMentions?: { label: string; slack_id: string }[];
 }
 
 export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot' | 'role_panel' | 'slack_settings';
@@ -176,13 +178,14 @@ function AppContent() {
   });
   const [selectedShootId, setSelectedShootId] = useState<string | null>(() => {
     if (vendorShootId) return vendorShootId;
-    // Restore shootId from Slack/email deep link (saved before login redirect)
+    // Deep-link: ?shootId= works both when already logged in AND after login redirect
+    const urlShootId = urlParams.get('shootId');
     const pendingShootId = sessionStorage.getItem('pending_shoot_id');
-    if (pendingShootId) {
+    const deepLinkId = urlShootId || pendingShootId;
+    if (deepLinkId) {
       sessionStorage.removeItem('pending_shoot_id');
-      // Also clear the URL param cleanly
       window.history.replaceState({}, '', window.location.pathname);
-      return pendingShootId;
+      return deepLinkId;
     }
     return localStorage.getItem(STORAGE_KEYS.SELECTED_SHOOT);
   });
@@ -741,6 +744,7 @@ function AppContent() {
                 isMultiShoot: s.is_multi_shoot,
                 multiShootIndex: s.multi_shoot_index,
                 totalShootsInRequest: s.total_shoots_in_request,
+                slackApprovalMentions: s.slack_approval_mentions || [],
               };
             });
             setShoots(formattedShoots);
@@ -822,6 +826,7 @@ function AppContent() {
       is_multi_shoot: shoot.isMultiShoot,
       multi_shoot_index: shoot.multiShootIndex,
       total_shoots_in_request: shoot.totalShootsInRequest,
+      slack_approval_mentions: shoot.slackApprovalMentions || [],
     };
 
     try {
@@ -1255,11 +1260,16 @@ function AppContent() {
         addActivityToShoot(s.shootId, 'Quote Submitted', `Vendor submitted quote: ₹${s.amount.toLocaleString()}`);
       });
 
-      // Slack: notify approval reviewer (separate person) for each submission
+      // Slack: notify approval reviewer — use per-shoot tag set at request time, then global fallback
       getSlackSettings().then(sl => {
         if (!sl.webhook_url) return;
-        const approvalMentions = (sl.approvalMentions || []).length > 0 ? sl.approvalMentions : sl.mentions;
         submissions.forEach(s => {
+          // Priority: 1) per-shoot approval tag, 2) global approvalMentions, 3) global mentions
+          const perShootApproval = s.shoot.slackApprovalMentions;
+          const approvalMentions =
+            (perShootApproval && perShootApproval.length > 0) ? perShootApproval :
+            (sl.approvalMentions && sl.approvalMentions.length > 0) ? sl.approvalMentions :
+            sl.mentions;
           slackQuoteSubmitted(sl.webhook_url, {
             id: s.shootId,
             name: s.shoot.name,
@@ -1517,6 +1527,7 @@ function AppContent() {
       isMultiShoot: shootData.isMultiShoot || false,
       multiShootIndex: shootData.multiShootIndex,
       totalShootsInRequest: shootData.totalShootsInRequest,
+      slackApprovalMentions: shootData.slackApprovalMentions || [],
       activities: [{
         id: '1',
         shootId,
