@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   CheckCircle, 
@@ -18,7 +18,10 @@ import {
   Crown,
   Zap,
   Users,
-  Edit3
+  Edit3,
+  Bell,
+  Send,
+  Loader
 } from 'lucide-react';
 import type { Shoot } from '../App';
 
@@ -70,6 +73,81 @@ export function MainDashboard({
   const [showSendToVendorModal, setShowSendToVendorModal] = useState(false);
   const [selectedShootForVendor, setSelectedShootForVendor] = useState<Shoot | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Quick Notify state
+  const [slackWebhook, setSlackWebhook] = useState('');
+  const [slackMembers, setSlackMembers] = useState<{ name: string; slack_id: string }[]>([]);
+  const [notifyOpenFor, setNotifyOpenFor] = useState<string | null>(null); // shootId
+  const [notifyInput, setNotifyInput] = useState('');
+  const [notifyStatus, setNotifyStatus] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+  const notifyRef = useRef<HTMLDivElement>(null);
+
+  // Fetch Slack settings once
+  useEffect(() => {
+    fetch('/api/slack/settings')
+      .then(r => r.json())
+      .then(data => {
+        setSlackWebhook(data.webhook_url || '');
+        try {
+          const m = typeof data.mentions === 'string' ? JSON.parse(data.mentions) : (data.mentions || []);
+          setSlackMembers(m);
+        } catch { setSlackMembers([]); }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Close notify dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifyRef.current && !notifyRef.current.contains(e.target as Node)) {
+        setNotifyOpenFor(null);
+        setNotifyInput('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const sendQuickNotify = async (shoot: Shoot, memberName: string, slackId?: string) => {
+    if (!slackWebhook) return;
+    const key = `${shoot.id}:${memberName}`;
+    setNotifyStatus(p => ({ ...p, [key]: 'sending' }));
+    const mention = slackId ? `<@${slackId}>` : `@${memberName}`;
+    const APP_URL = 'https://pre-production-poc-production.up.railway.app';
+    const statusLabel: Record<string, string> = {
+      new_request: 'New Request', with_vendor: 'Waiting for Quote',
+      with_swati: 'Approval Pending', ready_for_shoot: 'Active Shoot',
+      pending_invoice: 'Upload Invoice Pending', completed: 'Completed',
+    };
+    const text = `${mention} — *${shoot.name}* needs your attention.\nStatus: *${statusLabel[shoot.status] || shoot.status}*\nDate: ${shoot.date}`;
+    try {
+      const res = await fetch('/api/slack/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webhook_url: slackWebhook,
+          text,
+          blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text } },
+            {
+              type: 'actions',
+              elements: [{
+                type: 'button',
+                text: { type: 'plain_text', text: 'Open in App →', emoji: true },
+                url: `${APP_URL}?shootId=${shoot.id}`,
+                style: 'primary',
+              }]
+            }
+          ],
+        }),
+      });
+      setNotifyStatus(p => ({ ...p, [key]: res.ok ? 'sent' : 'error' }));
+      setTimeout(() => setNotifyStatus(p => { const n = { ...p }; delete n[key]; return n; }), 3000);
+    } catch {
+      setNotifyStatus(p => ({ ...p, [key]: 'error' }));
+      setTimeout(() => setNotifyStatus(p => { const n = { ...p }; delete n[key]; return n; }), 3000);
+    }
+  };
 
   const openSendToVendorModal = (shoot: Shoot) => {
     setSelectedShootForVendor(shoot);
@@ -256,10 +334,10 @@ export function MainDashboard({
     }
   };
 
-  // Edit is available until invoice is uploaded — so admin can adjust prices at any stage
+  // Edit is available once the quote is received from media house (with_swati onwards), until invoice is uploaded
   const canEdit = (shoot: Shoot) =>
     isAdmin && !!onEditShoot && !shoot.invoiceFile &&
-    shoot.status !== 'cancelled' && shoot.status !== 'completed';
+    (shoot.status === 'with_swati' || shoot.status === 'ready_for_shoot' || shoot.status === 'pending_invoice');
 
   const editBtn = (shoot: Shoot) =>
     canEdit(shoot) ? (
@@ -568,6 +646,7 @@ export function MainDashboard({
                     )}
                     <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[15%]">Status</th>
                     <th className="px-6 py-3 text-left text-sm text-gray-700 font-medium w-[22%]">Action</th>
+                    {isAdmin && <th className="px-3 py-3 text-center text-sm text-gray-700 font-medium w-[6%]">Notify</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -611,6 +690,91 @@ export function MainDashboard({
                             {getActionButton(shoot)}
                           </div>
                         </td>
+                        {isAdmin && (
+                          <td className="px-3 py-4 text-center relative">
+                            <div ref={notifyOpenFor === shoot.id ? notifyRef : undefined} className="relative inline-block">
+                              <button
+                                onClick={() => {
+                                  setNotifyOpenFor(notifyOpenFor === shoot.id ? null : shoot.id);
+                                  setNotifyInput('');
+                                }}
+                                title="Quick Notify via Slack"
+                                className="p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                style={{ color: notifyOpenFor === shoot.id ? '#2D60FF' : '#9CA3AF' }}
+                              >
+                                <Bell className="w-4 h-4" />
+                              </button>
+
+                              {/* Dropdown */}
+                              {notifyOpenFor === shoot.id && (
+                                <div
+                                  className="absolute right-0 top-9 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-3"
+                                  style={{ width: '230px' }}
+                                >
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">Notify via Slack</p>
+
+                                  {slackWebhook ? (
+                                    <>
+                                      {/* Configured members */}
+                                      {slackMembers.length > 0 && (
+                                        <div className="space-y-1 mb-2">
+                                          {slackMembers.map(m => {
+                                            const key = `${shoot.id}:${m.name}`;
+                                            const st = notifyStatus[key] || 'idle';
+                                            return (
+                                              <button
+                                                key={m.name}
+                                                disabled={st === 'sending'}
+                                                onClick={() => sendQuickNotify(shoot, m.name, m.slack_id)}
+                                                className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm hover:bg-blue-50 transition-colors"
+                                                style={{ border: '1px solid #E5E7EB' }}
+                                              >
+                                                <span className="font-medium text-gray-800">@{m.name}</span>
+                                                {st === 'sending' && <Loader className="w-3.5 h-3.5 text-blue-400 animate-spin" />}
+                                                {st === 'sent' && <span className="text-xs text-green-600 font-medium">✓ Sent</span>}
+                                                {st === 'error' && <span className="text-xs text-red-500 font-medium">✗ Failed</span>}
+                                                {st === 'idle' && <Send className="w-3.5 h-3.5 text-gray-400" />}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+
+                                      {/* Manual input */}
+                                      <div className="flex gap-1.5 mt-1">
+                                        <input
+                                          type="text"
+                                          value={notifyInput}
+                                          onChange={e => setNotifyInput(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter' && notifyInput.trim()) {
+                                              sendQuickNotify(shoot, notifyInput.trim());
+                                              setNotifyInput('');
+                                            }
+                                          }}
+                                          placeholder="Type name / ID…"
+                                          className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                        />
+                                        <button
+                                          disabled={!notifyInput.trim()}
+                                          onClick={() => { sendQuickNotify(shoot, notifyInput.trim()); setNotifyInput(''); }}
+                                          className="px-2 py-1.5 rounded-lg text-white text-xs disabled:opacity-40"
+                                          style={{ backgroundColor: '#2D60FF' }}
+                                        >
+                                          <Send className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-gray-400 text-center py-2">
+                                      Configure Slack webhook in<br />Slack Integration settings first.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
