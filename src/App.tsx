@@ -156,6 +156,12 @@ function AppContent() {
   // Check if this is a vendor link (opens form only) - vendors don't need login
   const urlParams = new URLSearchParams(window.location.search);
   const vendorShootId = urlParams.get('vendor');
+
+  // If a ?shootId= is in the URL (from Slack/email links), save it before login redirect
+  const shootIdFromUrl = urlParams.get('shootId');
+  if (shootIdFromUrl && !isAuthenticated) {
+    sessionStorage.setItem('pending_shoot_id', shootIdFromUrl);
+  }
   
   // If not authenticated and not a vendor link, show login
   if (!isAuthenticated && !vendorShootId) {
@@ -170,6 +176,14 @@ function AppContent() {
   });
   const [selectedShootId, setSelectedShootId] = useState<string | null>(() => {
     if (vendorShootId) return vendorShootId;
+    // Restore shootId from Slack/email deep link (saved before login redirect)
+    const pendingShootId = sessionStorage.getItem('pending_shoot_id');
+    if (pendingShootId) {
+      sessionStorage.removeItem('pending_shoot_id');
+      // Also clear the URL param cleanly
+      window.history.replaceState({}, '', window.location.pathname);
+      return pendingShootId;
+    }
     return localStorage.getItem(STORAGE_KEYS.SELECTED_SHOOT);
   });
   

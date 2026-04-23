@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const cron = require('node-cron');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -1550,6 +1551,113 @@ app.post('/api/slack/test', async (req, res) => {
   } catch (error) {
     console.error('Slack test error:', error);
     res.status(500).json({ error: 'Test failed', details: error.message });
+  }
+});
+
+// ============================================
+// MONTHLY SLACK SPENDING REPORT (1st of each month, 9 AM IST = 3:30 AM UTC)
+// ============================================
+async function sendMonthlySlackReport() {
+  try {
+    if (!pool) { console.log('Monthly report: no DB'); return; }
+
+    // Get Slack webhook from settings
+    const settingsRow = await pool.query("SELECT * FROM slack_settings LIMIT 1").catch(() => null);
+    if (!settingsRow || settingsRow.rows.length === 0) return;
+    const webhookUrl = settingsRow.rows[0].webhook_url;
+    if (!webhookUrl) { console.log('Monthly report: no Slack webhook configured'); return; }
+
+    // Previous month date range
+    const now = new Date();
+    const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const monthName = firstOfLastMonth.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+    // Fetch completed/paid shoots from previous month
+    const result = await pool.query(`
+      SELECT name, approved_amount, vendor_quote, shoot_date, created_at
+      FROM shoots
+      WHERE (status = 'completed' OR paid = true)
+        AND (
+          (shoot_date IS NOT NULL AND shoot_date >= $1 AND shoot_date <= $2)
+          OR (shoot_date IS NULL AND created_at >= $1 AND created_at <= $2)
+        )
+      ORDER BY COALESCE(shoot_date, created_at) ASC
+    `, [firstOfLastMonth.toISOString(), lastOfLastMonth.toISOString()]);
+
+    if (result.rows.length === 0) {
+      console.log(`Monthly report: no completed shoots found for ${monthName}`);
+      return;
+    }
+
+    // Build message
+    const shoots = result.rows.map(row => {
+      const amount = row.approved_amount ||
+        (row.vendor_quote && typeof row.vendor_quote === 'object' ? row.vendor_quote.amount : null) ||
+        (row.vendor_quote ? JSON.parse(row.vendor_quote).amount : 0) || 0;
+      return { name: row.name || 'Unnamed Shoot', amount: Number(amount) };
+    });
+
+    const total = shoots.reduce((s, r) => s + r.amount, 0);
+    const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
+
+    let shootLines = shoots.map((s, i) => `${i + 1}. *${s.name}* — ${fmt(s.amount)}`).join('\n');
+
+    const text = shoots.length === 1
+      ? `In ${monthName}, you spent *${fmt(total)}* in total.`
+      : `In ${monthName}, you had *${shoots.length} shoots* with a total spend of *${fmt(total)}*.`;
+
+    const blocks = [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: `📊 Monthly Spend Report — ${monthName}`, emoji: true }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: shoots.length === 1
+            ? `*${shoots[0].name}*\n${fmt(total)}`
+            : `${shootLines}\n\n*Total: ${fmt(total)}*`
+        }
+      },
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `_This is your automated monthly summary for ${monthName}._` }
+      }
+    ];
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, blocks })
+    });
+
+    if (response.ok) {
+      console.log(`✅ Monthly Slack report sent for ${monthName}`);
+    } else {
+      const errText = await response.text();
+      console.error(`❌ Monthly Slack report failed: ${response.status} — ${errText}`);
+    }
+  } catch (err) {
+    console.error('Monthly Slack report error:', err.message);
+  }
+}
+
+// Schedule: 1st of every month at 9:00 AM IST (3:30 AM UTC)
+cron.schedule('30 3 1 * *', () => {
+  console.log('⏰ Running monthly Slack spend report...');
+  sendMonthlySlackReport();
+}, { timezone: 'UTC' });
+
+// Also expose a manual trigger endpoint for testing
+app.post('/api/slack/monthly-report', async (req, res) => {
+  try {
+    await sendMonthlySlackReport();
+    res.json({ success: true, message: 'Monthly report sent' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
