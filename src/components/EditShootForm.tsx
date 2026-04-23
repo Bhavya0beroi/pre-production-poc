@@ -369,7 +369,6 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
               Save
             </button>
           </div>
-        </div>
       </div>
 
       {/* ── Editing banner ── */}
