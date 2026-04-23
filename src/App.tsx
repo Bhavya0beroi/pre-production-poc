@@ -190,8 +190,9 @@ function AppContent() {
       };
       if (viewMap[deepView]) return viewMap[deepView];
     }
-    const saved = localStorage.getItem(STORAGE_KEYS.VIEW_MODE);
-    return (saved as ViewMode) || 'dashboard';
+    const saved = localStorage.getItem(STORAGE_KEYS.VIEW_MODE) as ViewMode | null;
+    // 'vendor' view must never be restored from localStorage — it is only valid with a ?vendor= URL param
+    return (!saved || saved === 'vendor') ? 'dashboard' : saved;
   });
   const [selectedShootId, setSelectedShootId] = useState<string | null>(() => {
     if (vendorShootId) return vendorShootId;
@@ -208,8 +209,11 @@ function AppContent() {
   });
   
   // Save viewMode and selectedShoot to localStorage when they change
+  // Never persist 'vendor' — it is only valid when accessed via ?vendor= URL param
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.VIEW_MODE, viewMode);
+    if (viewMode !== 'vendor') {
+      localStorage.setItem(STORAGE_KEYS.VIEW_MODE, viewMode);
+    }
   }, [viewMode]);
   
   useEffect(() => {
