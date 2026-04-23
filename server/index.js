@@ -751,11 +751,13 @@ async function initDatabase() {
         is_multi_shoot BOOLEAN DEFAULT FALSE,
         multi_shoot_index INTEGER,
         total_shoots_in_request INTEGER,
-        slack_approval_mentions JSONB DEFAULT '[]'::jsonb
+        slack_approval_mentions JSONB DEFAULT '[]'::jsonb,
+        slack_mentions JSONB DEFAULT '[]'::jsonb
       )
     `);
-    // Add column if it doesn't exist (for existing databases)
+    // Add columns if they don't exist (for existing databases)
     await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS slack_approval_mentions JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+    await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS slack_mentions JSONB DEFAULT '[]'::jsonb`).catch(() => {});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS catalog_items (
@@ -934,8 +936,8 @@ app.post('/api/shoots', async (req, res) => {
         vendor_quote, approved, approved_amount, invoice_file, paid,
         rejection_reason, approval_email, cancellation_reason, activities,
         email_thread_id, created_at, shoot_date, request_group_id,
-        is_multi_shoot, multi_shoot_index, total_shoots_in_request, slack_approval_mentions
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+        is_multi_shoot, multi_shoot_index, total_shoots_in_request, slack_approval_mentions, slack_mentions
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         date = EXCLUDED.date,
@@ -960,7 +962,8 @@ app.post('/api/shoots', async (req, res) => {
         is_multi_shoot = EXCLUDED.is_multi_shoot,
         multi_shoot_index = EXCLUDED.multi_shoot_index,
         total_shoots_in_request = EXCLUDED.total_shoots_in_request,
-        slack_approval_mentions = EXCLUDED.slack_approval_mentions
+        slack_approval_mentions = EXCLUDED.slack_approval_mentions,
+        slack_mentions = EXCLUDED.slack_mentions
       RETURNING *
     `, [
       shoot.id,
@@ -988,7 +991,8 @@ app.post('/api/shoots', async (req, res) => {
       shoot.is_multi_shoot,
       shoot.multi_shoot_index,
       shoot.total_shoots_in_request,
-      JSON.stringify(shoot.slack_approval_mentions || [])
+      JSON.stringify(shoot.slack_approval_mentions || []),
+      JSON.stringify(shoot.slack_mentions || [])
     ]);
     
     console.log('✅ POST /api/shoots - Saved:', result.rows[0].id, 'status:', result.rows[0].status);

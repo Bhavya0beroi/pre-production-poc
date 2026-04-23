@@ -92,6 +92,8 @@ export interface Shoot {
   isMultiShoot?: boolean;
   multiShootIndex?: number;
   totalShootsInRequest?: number;
+  // Per-shoot general Slack mentions (set at request creation time — used for all non-approval notifications)
+  slackMentions?: { label: string; slack_id: string }[];
   // Per-shoot Slack approval reviewer (set at request creation time)
   slackApprovalMentions?: { label: string; slack_id: string }[];
 }
@@ -759,6 +761,7 @@ function AppContent() {
                 isMultiShoot: s.is_multi_shoot,
                 multiShootIndex: s.multi_shoot_index,
                 totalShootsInRequest: s.total_shoots_in_request,
+                slackMentions: s.slack_mentions || [],
                 slackApprovalMentions: s.slack_approval_mentions || [],
               };
             });
@@ -841,6 +844,7 @@ function AppContent() {
       is_multi_shoot: shoot.isMultiShoot,
       multi_shoot_index: shoot.multiShootIndex,
       total_shoots_in_request: shoot.totalShootsInRequest,
+      slack_mentions: shoot.slackMentions || [],
       slack_approval_mentions: shoot.slackApprovalMentions || [],
     };
 
@@ -1353,11 +1357,12 @@ function AppContent() {
 
     getSlackSettings().then(sl => {
       if (!sl.webhook_url) return;
+      const mentions = (shoot.slackMentions && shoot.slackMentions.length > 0) ? shoot.slackMentions : sl.mentions;
       slackQuoteApproved(sl.webhook_url, {
         id: shootId, name: shoot.name,
         dates: shoot.date || shoot.dates || '—',
         amount: shoot.vendorQuote?.amount,
-      }, sl.mentions).catch(() => {});
+      }, mentions).catch(() => {});
     });
   };
 
@@ -1409,11 +1414,12 @@ function AppContent() {
 
     getSlackSettings().then(sl => {
       if (!sl.webhook_url) return;
+      const mentions = (shoot.slackMentions && shoot.slackMentions.length > 0) ? shoot.slackMentions : sl.mentions;
       slackQuoteRejected(sl.webhook_url, {
         id: shootId, name: shoot.name,
         dates: shoot.date || shoot.dates || '—',
         reason,
-      }, sl.mentions).catch(() => {});
+      }, mentions).catch(() => {});
     });
   };
 
@@ -1448,11 +1454,12 @@ function AppContent() {
 
     getSlackSettings().then(sl => {
       if (!sl.webhook_url) return;
+      const mentions = (shoot.slackMentions && shoot.slackMentions.length > 0) ? shoot.slackMentions : sl.mentions;
       slackInvoiceUploaded(sl.webhook_url, {
         id: shootId, name: shoot.name,
         dates: shoot.date || shoot.dates || '—',
         fileName,
-      }, sl.mentions).catch(() => {});
+      }, mentions).catch(() => {});
     });
   };
 
@@ -1486,11 +1493,12 @@ function AppContent() {
 
     getSlackSettings().then(sl => {
       if (!sl.webhook_url) return;
+      const mentions = (shoot.slackMentions && shoot.slackMentions.length > 0) ? shoot.slackMentions : sl.mentions;
       slackPaymentCompleted(sl.webhook_url, {
         id: shootId, name: shoot.name,
         dates: shoot.date || shoot.dates || '—',
         amount: shoot.approvedAmount || shoot.vendorQuote?.amount,
-      }, sl.mentions).catch(() => {});
+      }, mentions).catch(() => {});
     });
     
     setSelectedShootId(null);
@@ -1542,6 +1550,7 @@ function AppContent() {
       isMultiShoot: shootData.isMultiShoot || false,
       multiShootIndex: shootData.multiShootIndex,
       totalShootsInRequest: shootData.totalShootsInRequest,
+      slackMentions: shootData.slackMentions || [],
       slackApprovalMentions: shootData.slackApprovalMentions || [],
       activities: [{
         id: '1',
