@@ -44,6 +44,8 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
   // Separate "Tag for Approval" — only sent when quote arrives from vendor
   const [approvalTagName, setApprovalTagName] = useState('');    // single person
   const [approvalTagInput, setApprovalTagInput] = useState('');
+  // Approval reviewer members loaded from Slack Settings "Approval Reviewer" section
+  const [slackApprovalConfiguredMembers, setSlackApprovalConfiguredMembers] = useState<{ label: string; slack_id: string }[]>([]);
 
   useEffect(() => {
     // Load configured Slack mentions from backend settings
@@ -55,6 +57,12 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
       .then(data => {
         if (data?.mentions?.length) {
           setSlackConfiguredMembers(data.mentions.filter((m: any) => m.label));
+        }
+        // approvalMentions is packed inside notifications by saveSlackSettings
+        const approvalMentions: { label: string; slack_id: string }[] =
+          data?.notifications?.approvalMentions || [];
+        if (approvalMentions.length) {
+          setSlackApprovalConfiguredMembers(approvalMentions.filter((m: any) => m.label));
         }
       })
       .catch(() => { /* ignore — non-critical */ });
@@ -442,7 +450,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
         }),
         slackApprovalMentions: approvalTagName
           ? (() => {
-              const configured = slackConfiguredMembers.find(m => m.label === approvalTagName);
+              // Look up slack_id from approval-reviewer list first, then general list as fallback
+              const configured =
+                slackApprovalConfiguredMembers.find(m => m.label === approvalTagName) ||
+                slackConfiguredMembers.find(m => m.label === approvalTagName);
               return [{ label: approvalTagName, slack_id: configured?.slack_id || '' }];
             })()
           : [],
@@ -792,10 +803,10 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                   <span className="text-gray-400 ml-1">(notified when quote is received)</span>
                 </label>
 
-                {/* Quick-pick from configured members */}
-                {slackConfiguredMembers.length > 0 && (
+                {/* Quick-pick: only show Approval Reviewer(s) from Slack Settings */}
+                {slackApprovalConfiguredMembers.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {slackConfiguredMembers.map(m => {
+                    {slackApprovalConfiguredMembers.map(m => {
                       const selected = approvalTagName === m.label;
                       return (
                         <button
@@ -813,6 +824,11 @@ export function CreateRequestForm({ onClose, onSubmit, catalogItems, onAddCatalo
                       );
                     })}
                   </div>
+                )}
+                {slackApprovalConfiguredMembers.length === 0 && (
+                  <p className="text-xs text-orange-400 mb-2">
+                    No approval reviewer set — add one in Slack Integration → Approval Reviewer
+                  </p>
                 )}
 
                 {/* Manual input / selected chip */}
