@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   CheckCircle, 
@@ -12,7 +12,10 @@ import {
   EyeOff,
   Lock,
   Zap,
-  Users
+  Users,
+  Bell,
+  Send,
+  Loader
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
@@ -215,7 +218,63 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
   };
 
   const [isApproving, setIsApproving] = useState(false);
-  
+
+  // ── Slack inline notify ──────────────────────────────────────────
+  const [slackWebhook, setSlackWebhook] = useState('');
+  const [slackMembers, setSlackMembers] = useState<{ name: string; slack_id: string }[]>([]);
+  const [approvalNotifyInput, setApprovalNotifyInput] = useState('');
+  const [approvalNotifyStatus, setApprovalNotifyStatus] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+
+  useEffect(() => {
+    fetch('/api/slack/settings')
+      .then(r => r.json())
+      .then(data => {
+        setSlackWebhook(data.webhook_url || '');
+        try {
+          const m = typeof data.mentions === 'string' ? JSON.parse(data.mentions) : (data.mentions || []);
+          setSlackMembers(m);
+        } catch { setSlackMembers([]); }
+      })
+      .catch(() => {});
+  }, []);
+
+  const sendApprovalNotify = async (shoot: Shoot, memberName: string, slackId?: string) => {
+    if (!slackWebhook) return;
+    setApprovalNotifyStatus(p => ({ ...p, [memberName]: 'sending' }));
+    const mention = slackId ? `<@${slackId}>` : `@${memberName}`;
+    const APP_URL = 'https://pre-production-poc-production.up.railway.app';
+    const amount = shoot.vendorQuote?.amount ? `₹${shoot.vendorQuote.amount.toLocaleString('en-IN')}` : 'TBD';
+    const text = `${mention} — Quote received for *${shoot.name}* (${shoot.date})\nAmount: *${amount}*\nPlease review and approve or reject.`;
+    try {
+      const res = await fetch('/api/slack/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webhook_url: slackWebhook,
+          text,
+          blocks: [
+            { type: 'section', text: { type: 'mrkdwn', text } },
+            {
+              type: 'actions',
+              elements: [{
+                type: 'button',
+                text: { type: 'plain_text', text: 'Review Quote →', emoji: true },
+                url: `${APP_URL}?shootId=${shoot.id}`,
+                style: 'primary',
+              }]
+            }
+          ],
+        }),
+      });
+      setApprovalNotifyStatus(p => ({ ...p, [memberName]: res.ok ? 'sent' : 'error' }));
+      setTimeout(() => setApprovalNotifyStatus(p => { const n = { ...p }; delete n[memberName]; return n; }), 3000);
+    } catch {
+      setApprovalNotifyStatus(p => ({ ...p, [memberName]: 'error' }));
+      setTimeout(() => setApprovalNotifyStatus(p => { const n = { ...p }; delete n[memberName]; return n; }), 3000);
+    }
+  };
+  // ────────────────────────────────────────────────────────────────
+
   const handleApprove = async () => {
     if (selectedShoot && !isApproving) {
       setIsApproving(true);
@@ -851,35 +910,101 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
 
             {/* Modal Footer - Only show action buttons for pending approvals AND admin users */}
             {activeGroupShoot?.status === 'with_swati' && !activeGroupShoot?.approved && isAdmin && (
-              <div className="px-6 py-3 border-t border-gray-100 flex-shrink-0">
+              <div className="px-6 pt-4 pb-3 border-t border-gray-100 flex-shrink-0 space-y-3">
+
+                {/* ── Slack Notify Panel ── */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Bell className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="text-xs font-semibold text-blue-700">Notify via Slack</span>
+                    <span className="text-xs text-blue-400 ml-1">— tag someone about this quote</span>
+                  </div>
+                  {slackWebhook ? (
+                    <>
+                      {slackMembers.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {slackMembers.map(m => {
+                            const st = approvalNotifyStatus[m.name] || 'idle';
+                            return (
+                              <button
+                                key={m.name}
+                                disabled={st === 'sending'}
+                                onClick={() => sendApprovalNotify(activeGroupShoot, m.name, m.slack_id)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                                style={{
+                                  backgroundColor: st === 'sent' ? '#D1FAE5' : st === 'error' ? '#FEE2E2' : '#DBEAFE',
+                                  color: st === 'sent' ? '#065F46' : st === 'error' ? '#B91C1C' : '#1D4ED8',
+                                  border: '1px solid',
+                                  borderColor: st === 'sent' ? '#6EE7B7' : st === 'error' ? '#FCA5A5' : '#BFDBFE',
+                                }}
+                              >
+                                {st === 'sending' && <Loader className="w-3 h-3 animate-spin" />}
+                                {st === 'sent' && <span>✓</span>}
+                                {st === 'error' && <span>✗</span>}
+                                {st === 'idle' && <Send className="w-3 h-3" />}
+                                @{m.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={approvalNotifyInput}
+                          onChange={e => setApprovalNotifyInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && approvalNotifyInput.trim()) {
+                              sendApprovalNotify(activeGroupShoot, approvalNotifyInput.trim());
+                              setApprovalNotifyInput('');
+                            }
+                          }}
+                          placeholder="Type a name or Slack ID…"
+                          className="flex-1 px-2.5 py-1.5 text-xs border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                        <button
+                          disabled={!approvalNotifyInput.trim()}
+                          onClick={() => { sendApprovalNotify(activeGroupShoot, approvalNotifyInput.trim()); setApprovalNotifyInput(''); }}
+                          className="px-2.5 py-1.5 rounded-lg text-white text-xs disabled:opacity-40"
+                          style={{ backgroundColor: '#2D60FF' }}
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-blue-400">Configure Slack webhook in Slack Integration settings to enable notifications.</p>
+                  )}
+                </div>
+
                 {isMultiShoot && (
-                  <div className="mb-2 text-center text-xs text-gray-500">
+                  <div className="text-center text-xs text-gray-500">
                     Applies to all {groupedShoots.length} shoots
                   </div>
                 )}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setShowRejectDialog(true)}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setShowRejectDialog(true)}
                     className="px-5 py-2.5 rounded-lg border-2 text-red-600 hover:bg-red-50 transition-colors font-medium text-sm"
-              style={{ borderColor: '#DC2626' }}
-            >
+                    style={{ borderColor: '#DC2626' }}
+                  >
                     Reject {isMultiShoot ? 'All' : 'Quote'}
-            </button>
-            <button
-              onClick={handleApprove}
-              disabled={isApproving}
-              className="px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#27AE60' }}
-            >
-              {isApproving ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  Approving...
-                </span>
-              ) : (
-                `Approve ${isMultiShoot ? 'All' : 'Quote'}`
-              )}
-            </button>
+                  </button>
+                  <button
+                    onClick={handleApprove}
+                    disabled={isApproving}
+                    className="px-5 py-2.5 rounded-lg text-white transition-colors font-medium hover:opacity-90 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: '#27AE60' }}
+                  >
+                    {isApproving ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        Approving...
+                      </span>
+                    ) : (
+                      `Approve ${isMultiShoot ? 'All' : 'Quote'}`
+                    )}
+                  </button>
                 </div>
               </div>
             )}

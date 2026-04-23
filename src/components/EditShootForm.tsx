@@ -121,6 +121,9 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
   }, {} as Record<string, CatalogItem[]>);
 
   const addEquipment = (item: CatalogItem) => {
+    // Items added to "Before Shoot" section keep isNew=false (original request items)
+    // Items added to "After Shoot" section are isNew=true (admin additions)
+    const isNewItem = addModalGroup === 'after';
     const newEquipment: EditableEquipment = {
       id: item.id,
       name: item.name,
@@ -131,7 +134,7 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
       vendorRate: item.dailyRate,
       editedVendorRate: item.dailyRate,
       originalVendorRate: undefined,
-      isNew: true,
+      isNew: isNewItem,
     };
     setShootsData(prev => ({
       ...prev,
@@ -214,32 +217,26 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
   const newItemsCount = currentEquipment.filter(eq => eq.isNew).length;
   const isItemAdded = (itemId: string) => currentEquipment.some(eq => eq.id === itemId);
 
-  // Group items into Crew & Personnel vs Gear & Equipment
-  const isCrewCategory = (cat: string) => {
-    const c = cat.toLowerCase();
-    return c.includes('assistant') || c.includes('crew') || c.includes('gaffer') ||
-      c.includes('personnel') || c.includes('transport') || c.includes('extra');
-  };
-  const crewItems = currentEquipment.filter(eq => isCrewCategory(eq.category || ''));
-  const gearItems = currentEquipment.filter(eq => !isCrewCategory(eq.category || ''));
+  // "Equipment Before Shoot" = original request items (not added by admin)
+  // "Equipment After Shoot"  = items added by admin (isNew = true)
+  const beforeItems = currentEquipment.filter(eq => !eq.isNew);
+  const afterItems  = currentEquipment.filter(eq => eq.isNew === true);
 
-  const crewTotal = crewItems.reduce((s, eq) => s + (eq.editedVendorRate ?? eq.vendorRate ?? eq.dailyRate ?? 0), 0);
-  const gearTotal = gearItems.reduce((s, eq) => s + (eq.editedVendorRate ?? eq.vendorRate ?? eq.dailyRate ?? 0), 0);
+  const getRate = (eq: EditableEquipment) => eq.editedVendorRate ?? eq.vendorRate ?? eq.dailyRate ?? 0;
+  const beforeTotal = beforeItems.reduce((s, eq) => s + getRate(eq), 0);
+  const afterTotal  = afterItems.reduce((s, eq) => s + getRate(eq), 0);
+  const sectionGrandTotal = beforeTotal + afterTotal; // always consistent sum of both sections
 
-  // Catalog modal can be opened for 'crew' or 'gear' group
-  const [addModalGroup, setAddModalGroup] = useState<'crew' | 'gear' | null>(null);
-  const filteredCatalogItems = getAvailableCatalogItems().filter(item =>
-    addModalGroup === null ? true :
-    addModalGroup === 'crew' ? isCrewCategory(item.category) :
-    !isCrewCategory(item.category)
-  );
+  // Catalog modal: 'before' adds items without isNew flag, 'after' adds with isNew
+  const [addModalGroup, setAddModalGroup] = useState<'before' | 'after' | null>(null);
+  const filteredCatalogItems = getAvailableCatalogItems(); // show all catalog items in both modals
   const filteredGrouped = filteredCatalogItems.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
     acc[item.category].push(item);
     return acc;
   }, {} as Record<string, typeof filteredCatalogItems>);
 
-  const openAddModal = (group: 'crew' | 'gear') => {
+  const openAddModal = (group: 'before' | 'after') => {
     setAddModalGroup(group);
     setShowAddModal(true);
     setSearchQuery('');
@@ -400,21 +397,21 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
       {/* ── Main content ── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6 space-y-6">
 
-        {/* Crew & Personnel */}
+        {/* Equipment Before Shoot */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Users className="w-4 h-4 text-pink-500" />
-              Crew &amp; Personnel
-              <span className="ml-1 text-gray-400 font-normal">({crewItems.length} items)</span>
+              <Users className="w-4 h-4 text-blue-500" />
+              Equipment Before Shoot
+              <span className="ml-1 text-gray-400 font-normal">({beforeItems.length} items)</span>
             </h2>
           </div>
-          {crewItems.length === 0 ? (
+          {beforeItems.length === 0 ? (
             <div className="px-6 py-8 text-center">
-              <p className="text-sm text-gray-400">No crew members added. Select from catalog.</p>
-              <button onClick={() => openAddModal('crew')}
+              <p className="text-sm text-gray-400">No items in this section. Select from catalog.</p>
+              <button onClick={() => openAddModal('before')}
                 className="mt-3 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 mx-auto">
-                <Plus className="w-4 h-4" />Add Crew Member
+                <Plus className="w-4 h-4" />Add Item
               </button>
             </div>
           ) : (
@@ -431,35 +428,35 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {crewItems.map(item => <EquipmentRow key={item.id} item={item} />)}
+                    {beforeItems.map(item => <EquipmentRow key={item.id} item={item} />)}
                   </tbody>
                 </table>
               </div>
               <div className="px-6 py-3 border-t border-gray-100">
-                <button onClick={() => openAddModal('crew')}
+                <button onClick={() => openAddModal('before')}
                   className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  <Plus className="w-4 h-4" />Add Crew Member
+                  <Plus className="w-4 h-4" />Add Item (Before Shoot)
                 </button>
               </div>
             </>
           )}
         </div>
 
-        {/* Gear & Equipment */}
+        {/* Equipment After Shoot */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Camera className="w-4 h-4 text-blue-500" />
-              Gear &amp; Equipment
-              <span className="ml-1 text-gray-400 font-normal">({gearItems.length} items)</span>
+              <Camera className="w-4 h-4 text-purple-500" />
+              Equipment After Shoot
+              <span className="ml-1 text-gray-400 font-normal">({afterItems.length} items)</span>
             </h2>
           </div>
-          {gearItems.length === 0 ? (
+          {afterItems.length === 0 ? (
             <div className="px-6 py-8 text-center">
-              <p className="text-sm text-gray-400">No gear items added. Select from catalog.</p>
-              <button onClick={() => openAddModal('gear')}
+              <p className="text-sm text-gray-400">No items added after shoot yet.</p>
+              <button onClick={() => openAddModal('after')}
                 className="mt-3 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 mx-auto">
-                <Plus className="w-4 h-4" />Add Gear Item
+                <Plus className="w-4 h-4" />Add Item
               </button>
             </div>
           ) : (
@@ -476,14 +473,14 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {gearItems.map(item => <EquipmentRow key={item.id} item={item} />)}
+                    {afterItems.map(item => <EquipmentRow key={item.id} item={item} />)}
                   </tbody>
                 </table>
               </div>
               <div className="px-6 py-3 border-t border-gray-100">
-                <button onClick={() => openAddModal('gear')}
-                  className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  <Plus className="w-4 h-4" />Add Gear Item
+                <button onClick={() => openAddModal('after')}
+                  className="flex items-center gap-1.5 text-sm text-purple-600 hover:text-purple-700 font-medium">
+                  <Plus className="w-4 h-4" />Add Item (After Shoot)
                 </button>
               </div>
             </>
@@ -498,12 +495,12 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
           </div>
           <div className="px-6 py-4 space-y-2 text-sm text-gray-700">
             <div className="flex justify-between">
-              <span>Crew Subtotal:</span>
-              <span className="font-medium">₹{crewTotal.toLocaleString()}</span>
+              <span>Equipment Before Shoot:</span>
+              <span className="font-medium">₹{beforeTotal.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span>Gear Subtotal:</span>
-              <span className="font-medium">₹{gearTotal.toLocaleString()}</span>
+              <span>Equipment After Shoot:</span>
+              <span className="font-medium">₹{afterTotal.toLocaleString()}</span>
             </div>
             {isMultiShoot && allShoots.map((s, idx) => {
               const { vendorTotal: vt } = calculateShootTotal(s.id);
@@ -517,7 +514,7 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
             <div className="pt-2 mt-2 border-t border-gray-200 flex justify-between items-center">
               <span className="font-bold text-gray-900">Grand Total</span>
               <span className="text-lg font-bold text-gray-900">
-                ₹{(isMultiShoot ? grandTotals.vendorTotal : (editingPrices ? editedTotal : vendorTotal)).toLocaleString()}
+                ₹{(isMultiShoot ? grandTotals.vendorTotal : sectionGrandTotal).toLocaleString()}
                 <span className="ml-1 text-xs font-normal text-gray-400">({totalItems} items)</span>
               </span>
             </div>
@@ -532,7 +529,7 @@ export function EditShootForm({ shoot, relatedShoots = [], catalogItems, onSave,
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">
-                  {addModalGroup === 'crew' ? 'Add Crew Member' : addModalGroup === 'gear' ? 'Add Gear Item' : 'Add Equipment'}
+                  {addModalGroup === 'before' ? 'Add — Equipment Before Shoot' : addModalGroup === 'after' ? 'Add — Equipment After Shoot' : 'Add Equipment'}
                 </h3>
                 <p className="text-xs text-gray-500">Select from catalog</p>
               </div>
