@@ -107,18 +107,24 @@ export async function sendSlackNotification(
     : '—';
 
   const appUrl = shoot.appUrl || 'https://pre-production-poc-production.up.railway.app';
-  const link = shoot.shootId ? `${appUrl}?shootId=${shoot.shootId}` : appUrl;
+  const link = shoot.shootId ? `${appUrl}?shootId=${shoot.shootId}&view=dashboard` : appUrl;
 
-  // Build equipment lines (max 15 to keep message clean)
-  const equipmentLines = (shoot.equipment ?? [])
-    .slice(0, 15)
-    .map(e => {
-      const lineTotal = (e.dailyRate || 0) * (e.quantity || 1) * (e.days || 1);
-      const priceStr = lineTotal > 0 ? ` — ₹${lineTotal.toLocaleString('en-IN')}` : '';
-      return `• ${e.name} × ${e.quantity}${priceStr}`;
-    })
-    .join('\n');
-  const extraCount = (shoot.equipment?.length ?? 0) - 15;
+  // Build equipment lines — show all items (split across blocks to respect 3000-char Slack limit)
+  const allLines = (shoot.equipment ?? []).map(e => {
+    const lineTotal = (e.dailyRate || 0) * (e.quantity || 1) * (e.days || 1);
+    const priceStr = lineTotal > 0 ? ` — ₹${lineTotal.toLocaleString('en-IN')}` : '';
+    return `• ${e.name} × ${e.quantity}${priceStr}`;
+  });
+  // Chunk into groups of ~20 lines to stay under per-block character limits
+  const chunkLines = (lines: string[], size: number) => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < lines.length; i += size) chunks.push(lines.slice(i, i + size));
+    return chunks;
+  };
+  const equipmentChunks = chunkLines(allLines, 20);
+  const equipmentLines = equipmentChunks[0]?.join('\n') ?? '';
+  const extraChunks = equipmentChunks.slice(1);
+  const extraCount = 0; // no longer needed — all items shown
 
   // ── Single-column layout — easy to read, matches email style ──
   const detailsText = [
@@ -146,12 +152,16 @@ export async function sendSlackNotification(
       { type: 'divider' },
       {
         type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*📦 Equipment List*\n${equipmentLines}${extraCount > 0 ? `\n_…and ${extraCount} more_` : ''}`,
-        },
+        text: { type: 'mrkdwn', text: `*📦 Equipment List*\n${equipmentLines}` },
       },
     );
+    // Append continuation chunks (each ≤20 lines, well under 3000-char limit)
+    for (const chunk of extraChunks) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: chunk.join('\n') },
+      });
+    }
   }
 
   blocks.push(
@@ -223,6 +233,15 @@ export async function testSlackConnection(
 // All are fire-and-forget — call with .catch(() => {})
 // ─────────────────────────────────────────────────────────────
 
+function persistAlertLog(message: string, type: 'success' | 'error') {
+  try {
+    const entry = { id: Date.now().toString(), message, timestamp: new Date().toISOString(), type };
+    const existing = JSON.parse(localStorage.getItem('slack_alert_log') || '[]');
+    const updated = [entry, ...existing].slice(0, 20);
+    localStorage.setItem('slack_alert_log', JSON.stringify(updated));
+  } catch { /* non-critical */ }
+}
+
 async function postToSlack(webhookUrl: string, text: string, blocks: object[]) {
   const res = await fetch(`${API_URL}/api/slack/notify`, {
     method: 'POST',
@@ -231,8 +250,11 @@ async function postToSlack(webhookUrl: string, text: string, blocks: object[]) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.details || err.error || `HTTP ${res.status}`);
+    const errMsg = err.details || err.error || `HTTP ${res.status}`;
+    persistAlertLog(`${text} — failed: ${errMsg}`, 'error');
+    throw new Error(errMsg);
   }
+  persistAlertLog(text, 'success');
 }
 
 function mentionLine(mentions: SlackMention[]) {
@@ -285,7 +307,7 @@ export async function slackQuoteSubmitted(
   shoot: { id: string; name: string; dates: string; amount: number },
   approvalMentions: SlackMention[],
 ) {
-  const link = `${APP}?shootId=${shoot.id}`;
+  const link = `${APP}?shootId=${shoot.id}&view=approvals`;
   const blocks = buildBlocks(
     '💰 Quote Received — Needs Approval',
     {
@@ -306,7 +328,7 @@ export async function slackQuoteApproved(
   shoot: { id: string; name: string; dates: string; amount?: number },
   mentions: SlackMention[],
 ) {
-  const link = `${APP}?shootId=${shoot.id}`;
+  const link = `${APP}?shootId=${shoot.id}&view=dashboard`;
   const blocks = buildBlocks(
     '✅ Quote Approved',
     {
@@ -327,7 +349,7 @@ export async function slackQuoteRejected(
   shoot: { id: string; name: string; dates: string; reason?: string },
   mentions: SlackMention[],
 ) {
-  const link = `${APP}?shootId=${shoot.id}`;
+  const link = `${APP}?shootId=${shoot.id}&view=dashboard`;
   const blocks = buildBlocks(
     '❌ Quote Rejected — Sent Back to Vendor',
     {
@@ -348,7 +370,7 @@ export async function slackInvoiceUploaded(
   shoot: { id: string; name: string; dates: string; fileName: string },
   mentions: SlackMention[],
 ) {
-  const link = `${APP}?shootId=${shoot.id}`;
+  const link = `${APP}?shootId=${shoot.id}&view=finance`;
   const blocks = buildBlocks(
     '📄 Invoice Uploaded — Action Required',
     {
@@ -369,7 +391,7 @@ export async function slackPaymentCompleted(
   shoot: { id: string; name: string; dates: string; amount?: number },
   mentions: SlackMention[],
 ) {
-  const link = `${APP}?shootId=${shoot.id}`;
+  const link = `${APP}?shootId=${shoot.id}&view=finance`;
   const blocks = buildBlocks(
     '💵 Payment Completed',
     {

@@ -159,10 +159,12 @@ function AppContent() {
   const urlParams = new URLSearchParams(window.location.search);
   const vendorShootId = urlParams.get('vendor');
 
-  // If a ?shootId= is in the URL (from Slack/email links), save it before login redirect
+  // If a ?shootId= / ?view= is in the URL (from Slack/email links), save before login redirect
   const shootIdFromUrl = urlParams.get('shootId');
-  if (shootIdFromUrl && !isAuthenticated) {
-    sessionStorage.setItem('pending_shoot_id', shootIdFromUrl);
+  const viewFromUrl = urlParams.get('view');
+  if (!isAuthenticated) {
+    if (shootIdFromUrl) sessionStorage.setItem('pending_shoot_id', shootIdFromUrl);
+    if (viewFromUrl) sessionStorage.setItem('pending_view', viewFromUrl);
   }
   
   // If not authenticated and not a vendor link, show login
@@ -170,9 +172,22 @@ function AppContent() {
     return <LoginPage />;
   }
   
-  // Load viewMode from localStorage, default to dashboard
+  // Load viewMode — deep-link ?view= overrides localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (vendorShootId) return 'vendor';
+    const deepView = viewFromUrl || sessionStorage.getItem('pending_view');
+    if (deepView) {
+      sessionStorage.removeItem('pending_view');
+      // Map URL param values to internal ViewMode values
+      const viewMap: Record<string, ViewMode> = {
+        dashboard: 'dashboard',
+        approvals: 'approvals',
+        finance: 'finance',
+        catalog: 'catalog',
+        archive: 'archive',
+      };
+      if (viewMap[deepView]) return viewMap[deepView];
+    }
     const saved = localStorage.getItem(STORAGE_KEYS.VIEW_MODE);
     return (saved as ViewMode) || 'dashboard';
   });
@@ -1678,15 +1693,10 @@ function AppContent() {
     // Trigger Slack notification (fire-and-forget)
     getSlackSettings().then(slackSettings => {
       if (slackSettings.webhook_url && slackSettings.notifications.request_submitted) {
-        // Merge global mentions with per-submit mentions from the form
+        // Use per-form mentions if the user chose someone; otherwise fall back to global
         const perSubmitMentions: { label: string; slack_id: string }[] =
           requestData.slackMentions || [];
-        const allMentions = [
-          ...slackSettings.mentions,
-          ...perSubmitMentions.filter(
-            pm => !slackSettings.mentions.some(m => m.label === pm.label)
-          ),
-        ];
+        const allMentions = perSubmitMentions.length > 0 ? perSubmitMentions : slackSettings.mentions;
 
         const estimatedBudget = requestData.equipment?.reduce(
           (sum: number, item: any) =>

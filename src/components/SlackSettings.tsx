@@ -82,10 +82,19 @@ export function SlackSettings({
       setSettings(s);
       setLoading(false);
     })();
-    try {
-      const stored = localStorage.getItem('slack_alert_log');
-      if (stored) setAlertLog(JSON.parse(stored));
-    } catch { /* ignore */ }
+    const loadLog = () => {
+      try {
+        const stored = localStorage.getItem('slack_alert_log');
+        if (stored) setAlertLog(JSON.parse(stored));
+      } catch { /* ignore */ }
+    };
+    loadLog();
+    // Refresh log whenever another tab/component writes to localStorage
+    const onStorage = (e: StorageEvent) => { if (e.key === 'slack_alert_log') loadLog(); };
+    window.addEventListener('storage', onStorage);
+    // Also poll every 5 s for same-tab updates (postToSlack runs in same window)
+    const poll = setInterval(loadLog, 5000);
+    return () => { window.removeEventListener('storage', onStorage); clearInterval(poll); };
   }, []);
 
   const addAlert = (message: string, type: 'success' | 'error') => {
