@@ -84,7 +84,8 @@ export function RolePanel({
   onOpenApprovals, onOpenFinance, onOpenCatalog, onOpenArchive, onOpenSlackSettings,
   approvalsPending = 0,
 }: RolePanelProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin } = useAuth();
+  const canManage = isAdmin || isSuperAdmin;
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
@@ -241,14 +242,16 @@ export function RolePanel({
           <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <LayoutDashboard className="w-5 h-5" /><span>Active Shoots</span>
           </button>
-          <button onClick={onOpenApprovals} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left relative hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
-            <CheckCircle className="w-5 h-5" /><span>Approvals</span>
-            {approvalsPending > 0 && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ backgroundColor: '#F2994A', color: 'white' }}>
-                {approvalsPending}
-              </span>
-            )}
-          </button>
+          {canManage && (
+            <button onClick={onOpenApprovals} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left relative hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <CheckCircle className="w-5 h-5" /><span>Approvals</span>
+              {approvalsPending > 0 && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ backgroundColor: '#F2994A', color: 'white' }}>
+                  {approvalsPending}
+                </span>
+              )}
+            </button>
+          )}
           <button onClick={onOpenFinance} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <DollarSign className="w-5 h-5" /><span>Finance & Invoices</span>
           </button>
@@ -292,13 +295,15 @@ export function RolePanel({
               <p className="text-gray-400 text-xs">{users.length} member{users.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-medium hover:opacity-90"
-            style={{ backgroundColor: '#2D60FF' }}
-          >
-            <Plus className="w-4 h-4" />Add Member
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-medium hover:opacity-90"
+              style={{ backgroundColor: '#2D60FF' }}
+            >
+              <Plus className="w-4 h-4" />Add Member
+            </button>
+          )}
         </div>
 
         <div className="px-8 py-8">
@@ -337,41 +342,58 @@ export function RolePanel({
                         </div>
                       </div>
 
-                      {/* Role — plain native select, no custom icon overlay */}
+                      {/* Role — editable for admin/superAdmin, read-only badge for others */}
                       <div>
-                        <select
-                          value={u.role}
-                          onChange={e => handleRoleChange(u.email, e.target.value as UserRole)}
-                          style={{
+                        {canManage ? (
+                          <select
+                            value={u.role}
+                            onChange={e => handleRoleChange(u.email, e.target.value as UserRole)}
+                            style={{
+                              backgroundColor: c.bg, color: c.text,
+                              border: `1px solid ${c.border}`,
+                              borderRadius: 8, padding: '4px 8px',
+                              fontSize: 12, fontWeight: 600,
+                              cursor: 'pointer', outline: 'none',
+                            }}
+                          >
+                            <option value="user">Member</option>
+                            <option value="admin">Admin</option>
+                            <option value="super_admin">Super Admin</option>
+                          </select>
+                        ) : (
+                          <span style={{
                             backgroundColor: c.bg, color: c.text,
                             border: `1px solid ${c.border}`,
                             borderRadius: 8, padding: '4px 8px',
-                            fontSize: 12, fontWeight: 600,
-                            cursor: 'pointer', outline: 'none',
-                          }}
-                        >
-                          <option value="user">Member</option>
-                          <option value="admin">Admin</option>
-                          <option value="super_admin">Super Admin</option>
-                        </select>
+                            fontSize: 12, fontWeight: 600, display: 'inline-block',
+                          }}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Admin' : 'Member'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Department */}
                       <div className="text-gray-500 text-sm">{u.department || '—'}</div>
 
-                      {/* Actions */}
+                      {/* Actions — only admin/superAdmin can manage */}
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          title="Change password"
-                          onClick={() => { setPwModal({ email: u.email, name: u.name }); setPwForm({ password: '', confirm: '' }); setShowPwField(false); }}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50"
-                        ><KeyRound className="w-4 h-4" /></button>
-                        <button
-                          title="Remove user"
-                          onClick={() => setDeleteConfirm(u.email)}
-                          disabled={u.email === currentUserEmail}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                        ><Trash2 className="w-4 h-4" /></button>
+                        {canManage ? (
+                          <>
+                            <button
+                              title="Change password"
+                              onClick={() => { setPwModal({ email: u.email, name: u.name }); setPwForm({ password: '', confirm: '' }); setShowPwField(false); }}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                            ><KeyRound className="w-4 h-4" /></button>
+                            <button
+                              title="Remove user"
+                              onClick={() => setDeleteConfirm(u.email)}
+                              disabled={u.email === currentUserEmail}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                            ><Trash2 className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
                       </div>
                     </div>
                   );

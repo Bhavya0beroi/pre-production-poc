@@ -191,6 +191,7 @@ export async function sendSlackNotification(
   // Plain-text fallback required by Slack alongside blocks
   const fallbackText = `🔔 New shoot request: ${shoot.shootName} — by ${shoot.requestorName}`;
 
+  const logLabel = `🔔 New shoot request: ${shoot.shootName} — by ${shoot.requestorName}`;
   try {
     const res = await fetch(`${API_URL}/api/slack/notify`, {
       method: 'POST',
@@ -199,11 +200,13 @@ export async function sendSlackNotification(
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.details || err.error || `HTTP ${res.status}`);
+      const errMsg = err.details || err.error || `HTTP ${res.status}`;
+      persistAlertLog(`${logLabel} — failed: ${errMsg}`, 'error');
+      throw new Error(errMsg);
     }
+    persistAlertLog(logLabel, 'success');
     return true;
   } catch (e: any) {
-    // Re-throw so callers can show the actual Slack error
     throw e;
   }
 }
