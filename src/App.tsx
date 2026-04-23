@@ -183,7 +183,8 @@ function AppContent() {
       // Map URL param values to internal ViewMode values
       const viewMap: Record<string, ViewMode> = {
         dashboard: 'dashboard',
-        approvals: 'approvals',
+        approvals: 'approval',   // internal ViewMode uses 'approval' (no 's')
+        approval: 'approval',    // accept both spellings from Slack links
         finance: 'finance',
         catalog: 'catalog',
         archive: 'archive',
