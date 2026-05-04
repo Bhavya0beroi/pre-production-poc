@@ -148,9 +148,27 @@ export function VendorQuoteForm({ shoot, relatedShoots = [], onSubmit, onBack, i
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(vendorLink);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(vendorLink).catch(() => {
+        fallbackCopy(vendorLink);
+      });
+    } else {
+      fallbackCopy(vendorLink);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const fallbackCopy = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try { document.execCommand('copy'); } catch (_) { /* silent */ }
+    document.body.removeChild(textarea);
   };
 
   // Success screen

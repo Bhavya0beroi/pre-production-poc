@@ -711,16 +711,24 @@ function AppContent() {
         return;
       }
 
+      // AbortSignal.timeout is not available in Safari < 15.4 or older Android browsers
+      const timeoutSignal = (ms: number): AbortSignal => {
+        if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), ms);
+        return controller.signal;
+      };
+
       try {
         // Fetch shoots and catalog in PARALLEL for faster loading
         const [shootsResponse, catalogResponse] = await Promise.all([
           fetch(`${API_URL}/api/shoots`, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(8000)
+            signal: timeoutSignal(8000)
           }),
           fetch(`${API_URL}/api/catalog`, {
-            signal: AbortSignal.timeout(8000)
+            signal: timeoutSignal(8000)
           })
         ]);
         
