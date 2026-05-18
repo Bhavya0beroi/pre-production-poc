@@ -79,6 +79,7 @@ export interface Shoot {
     url: string;
     data?: string; // Base64 encoded PDF data
   };
+  paymentConfirmed?: boolean; // Finance team confirms payment was sent to vendor
   paid?: boolean;
   rejectionReason?: string;
   approvalEmail?: string | string[]; // UPDATED: Support multiple emails
@@ -1476,6 +1477,21 @@ function AppContent() {
     });
   };
 
+  const handleConfirmPayment = async (shootId: string) => {
+    const shoot = shoots.find(s => s.id === shootId);
+    if (!shoot) return;
+
+    const updatedShoot = {
+      ...shoot,
+      paymentConfirmed: true
+    };
+
+    // Save to API first
+    await saveShootToAPI(updatedShoot);
+
+    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+  };
+
   const handleMarkPaid = async (shootId: string) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) return;
@@ -1851,6 +1867,7 @@ function AppContent() {
         <InvoiceManagement 
           shoot={selectedShoot}
           onUploadInvoice={handleUploadInvoice}
+          onConfirmPayment={handleConfirmPayment}
           onMarkPaid={handleMarkPaid}
           onClose={() => {
             setViewMode('dashboard');

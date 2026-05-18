@@ -5,11 +5,12 @@ import type { Shoot } from '../App';
 interface InvoiceManagementProps {
   shoot: Shoot;
   onUploadInvoice: (shootId: string, fileName: string, fileData?: string) => void;
+  onConfirmPayment: (shootId: string) => void;
   onMarkPaid: (shootId: string) => void;
   onClose: () => void;
 }
 
-export function InvoiceManagement({ shoot, onUploadInvoice, onMarkPaid, onClose }: InvoiceManagementProps) {
+export function InvoiceManagement({ shoot, onUploadInvoice, onConfirmPayment, onMarkPaid, onClose }: InvoiceManagementProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -138,13 +139,13 @@ export function InvoiceManagement({ shoot, onUploadInvoice, onMarkPaid, onClose 
                   
                   <div 
                     className="p-4 rounded-xl"
-                    style={{ backgroundColor: shoot.paid ? '#F0FDF4' : '#FEF3C7' }}
+                    style={{ backgroundColor: shoot.paid ? '#F0FDF4' : shoot.paymentConfirmed ? '#DBEAFE' : '#FEF3C7' }}
                   >
-                    <div className="text-sm mb-1" style={{ color: shoot.paid ? '#27AE60' : '#F2994A' }}>
+                    <div className="text-sm mb-1" style={{ color: shoot.paid ? '#27AE60' : shoot.paymentConfirmed ? '#2D60FF' : '#F2994A' }}>
                       Payment Status
                     </div>
-                    <div style={{ color: shoot.paid ? '#27AE60' : '#F2994A' }}>
-                      {shoot.paid ? 'Paid' : 'Unpaid'}
+                    <div style={{ color: shoot.paid ? '#27AE60' : shoot.paymentConfirmed ? '#2D60FF' : '#F2994A' }}>
+                      {shoot.paid ? 'Paid' : shoot.paymentConfirmed ? 'Payment Confirmed by Finance' : 'Pending'}
                     </div>
                   </div>
                 </div>
@@ -281,26 +282,53 @@ export function InvoiceManagement({ shoot, onUploadInvoice, onMarkPaid, onClose 
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-100">
-          <div className="flex gap-3">
-            {shoot.invoiceFile?.data && (
-              <button
-                onClick={handleDownload}
-                className="flex-1 py-2.5 rounded-lg border-2 flex items-center justify-center gap-2 transition-all font-medium hover:bg-blue-50"
-                style={{ borderColor: '#2D60FF', color: '#2D60FF' }}
-              >
-                <Download className="w-5 h-5" />
-                Download PDF
-              </button>
-            )}
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              {shoot.invoiceFile?.data && (
+                <button
+                  onClick={handleDownload}
+                  className="flex-1 py-2.5 rounded-lg border-2 flex items-center justify-center gap-2 transition-all font-medium hover:bg-blue-50"
+                  style={{ borderColor: '#2D60FF', color: '#2D60FF' }}
+                >
+                  <Download className="w-5 h-5" />
+                  Download PDF
+                </button>
+              )}
+              {shoot.invoiceFile && !shoot.paymentConfirmed && !shoot.paid && (
+                <button
+                  onClick={() => onConfirmPayment(shoot.id)}
+                  className="flex-1 py-2.5 rounded-lg text-white flex items-center justify-center gap-2 transition-all font-medium hover:opacity-90"
+                  style={{ backgroundColor: '#F2994A' }}
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Finance Confirmed Payment
+                </button>
+              )}
+              {shoot.invoiceFile && shoot.paymentConfirmed && !shoot.paid && (
+                <button
+                  onClick={handleVerifyAndPay}
+                  className="flex-1 py-2.5 rounded-lg text-white flex items-center justify-center gap-2 transition-all font-medium hover:opacity-90"
+                  style={{ backgroundColor: '#27AE60' }}
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Mark as Paid
+                </button>
+              )}
+            </div>
+            
+            {/* Status indicator */}
             {shoot.invoiceFile && !shoot.paid && (
-              <button
-                onClick={handleVerifyAndPay}
-                className="flex-1 py-2.5 rounded-lg text-white flex items-center justify-center gap-2 transition-all font-medium hover:opacity-90"
-                style={{ backgroundColor: '#27AE60' }}
-              >
-                <CheckCircle className="w-5 h-5" />
-                Verify & Mark as Paid
-              </button>
+              <div className="text-sm text-center">
+                {!shoot.paymentConfirmed ? (
+                  <span className="text-orange-600">
+                    ⚠️ Waiting for finance team to confirm payment has been sent to vendor
+                  </span>
+                ) : (
+                  <span className="text-green-600">
+                    ✓ Finance team confirmed payment. You can now mark as paid.
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
