@@ -706,6 +706,23 @@ const pool = new Pool({
   max: 20 // maximum number of clients in the pool
 });
 
+// Auto-migrate database schema on startup
+async function runDatabaseMigrations() {
+  try {
+    console.log('🔄 Running database migrations...');
+    
+    // Add payment_confirmed column if it doesn't exist
+    await pool.query(`
+      ALTER TABLE shoots ADD COLUMN IF NOT EXISTS payment_confirmed BOOLEAN DEFAULT FALSE;
+    `);
+    
+    console.log('✅ Database migrations completed successfully');
+  } catch (error) {
+    console.error('⚠️ Database migration error:', error.message);
+    console.error('   This is non-critical - the app will continue to run');
+  }
+}
+
 // Test database connection
 pool.on('error', (err) => {
   console.error('❌ Unexpected database pool error:', err);
@@ -1688,6 +1705,11 @@ app.listen(port, async () => {
   console.log('='.repeat(60));
   
   const dbInitialized = await initDatabase();
+  
+  // Run database migrations after initialization
+  if (dbInitialized) {
+    await runDatabaseMigrations();
+  }
   
   console.log('='.repeat(60));
   if (dbInitialized) {
