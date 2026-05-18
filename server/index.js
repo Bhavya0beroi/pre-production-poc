@@ -752,12 +752,16 @@ async function initDatabase() {
         multi_shoot_index INTEGER,
         total_shoots_in_request INTEGER,
         slack_approval_mentions JSONB DEFAULT '[]'::jsonb,
-        slack_mentions JSONB DEFAULT '[]'::jsonb
+        slack_mentions JSONB DEFAULT '[]'::jsonb,
+        vendor_quotes JSONB DEFAULT '[]'::jsonb,
+        vendor_slot_names JSONB
       )
     `);
     // Add columns if they don't exist (for existing databases)
     await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS slack_approval_mentions JSONB DEFAULT '[]'::jsonb`).catch(() => {});
     await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS slack_mentions JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+    await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS vendor_quotes JSONB DEFAULT '[]'::jsonb`).catch(() => {});
+    await pool.query(`ALTER TABLE shoots ADD COLUMN IF NOT EXISTS vendor_slot_names JSONB`).catch(() => {});
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS catalog_items (
@@ -933,11 +937,12 @@ app.post('/api/shoots', async (req, res) => {
     const result = await pool.query(`
       INSERT INTO shoots (
         id, name, date, duration, location, call_time, equipment, status, requestor,
-        vendor_quote, approved, approved_amount, invoice_file, paid,
+        vendor_quote, approved, approved_amount, invoice_file, paid, payment_confirmed,
         rejection_reason, approval_email, cancellation_reason, activities,
         email_thread_id, created_at, shoot_date, request_group_id,
-        is_multi_shoot, multi_shoot_index, total_shoots_in_request, slack_approval_mentions, slack_mentions
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+        is_multi_shoot, multi_shoot_index, total_shoots_in_request, slack_approval_mentions, slack_mentions,
+        vendor_quotes, vendor_slot_names
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         date = EXCLUDED.date,
@@ -952,6 +957,7 @@ app.post('/api/shoots', async (req, res) => {
         approved_amount = EXCLUDED.approved_amount,
         invoice_file = EXCLUDED.invoice_file,
         paid = EXCLUDED.paid,
+        payment_confirmed = EXCLUDED.payment_confirmed,
         rejection_reason = EXCLUDED.rejection_reason,
         approval_email = EXCLUDED.approval_email,
         cancellation_reason = EXCLUDED.cancellation_reason,
@@ -963,7 +969,9 @@ app.post('/api/shoots', async (req, res) => {
         multi_shoot_index = EXCLUDED.multi_shoot_index,
         total_shoots_in_request = EXCLUDED.total_shoots_in_request,
         slack_approval_mentions = EXCLUDED.slack_approval_mentions,
-        slack_mentions = EXCLUDED.slack_mentions
+        slack_mentions = EXCLUDED.slack_mentions,
+        vendor_quotes = EXCLUDED.vendor_quotes,
+        vendor_slot_names = EXCLUDED.vendor_slot_names
       RETURNING *
     `, [
       shoot.id,
@@ -980,6 +988,7 @@ app.post('/api/shoots', async (req, res) => {
       shoot.approved_amount,
       JSON.stringify(shoot.invoice_file),
       shoot.paid,
+      shoot.payment_confirmed || false,
       shoot.rejection_reason,
       approvalEmailValue,
       shoot.cancellation_reason,
@@ -992,7 +1001,9 @@ app.post('/api/shoots', async (req, res) => {
       shoot.multi_shoot_index,
       shoot.total_shoots_in_request,
       JSON.stringify(shoot.slack_approval_mentions || []),
-      JSON.stringify(shoot.slack_mentions || [])
+      JSON.stringify(shoot.slack_mentions || []),
+      JSON.stringify(shoot.vendor_quotes || []),
+      shoot.vendor_slot_names ? JSON.stringify(shoot.vendor_slot_names) : null
     ]);
     
     console.log('✅ POST /api/shoots - Saved:', result.rows[0].id, 'status:', result.rows[0].status);
