@@ -1145,6 +1145,7 @@ function AppContent() {
   const handleSendToVendor = async (shootId: string) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (shoot) {
+      // Update status to with_vendor and open the vendor form
       const updatedShoot = { ...shoot, status: 'with_vendor' as ShootStatus };
       
       // Save to API first
@@ -1153,6 +1154,10 @@ function AppContent() {
       setShoots(prev => prev.map(s => 
         s.id === shootId ? updatedShoot : s
       ));
+      
+      // Open the vendor quote form
+      setSelectedShootId(shootId);
+      setViewMode('vendor');
       
       // Trigger email notification
       triggerEmail(
