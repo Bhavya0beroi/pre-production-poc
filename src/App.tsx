@@ -13,7 +13,6 @@ import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
 import { RolePanel } from './components/RolePanel';
 import { SlackSettings } from './components/SlackSettings';
-import { SendToVendorModal } from './components/SendToVendorModal';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DEFAULT_RECIPIENTS } from './services/emailService';
 import {
@@ -72,10 +71,6 @@ export interface Shoot {
   vendorQuote?: {
     amount: number;
     notes: string;
-  };
-  vendorNames?: {
-    slot1: string;
-    slot2: string;
   };
   approved?: boolean;
   approvedAmount?: number;
@@ -238,7 +233,6 @@ function AppContent() {
   const [toastNotifications, setToastNotifications] = useState<Notification[]>([]);
   const [selectedEmailThread, setSelectedEmailThread] = useState<Notification | null>(null);
   const [emailSentModal, setEmailSentModal] = useState<EmailMessage | null>(null);
-  const [sendToVendorShootId, setSendToVendorShootId] = useState<string | null>(null);
 
   // Helper function to create email messages for a thread
   const createEmailThread = (shootName: string, requestorEmail: string): EmailMessage[] => {
@@ -1148,39 +1142,27 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [shoots]);
 
-  const handleSendToVendor = (shootId: string) => {
-    // Open the modal to configure vendor names
-    setSendToVendorShootId(shootId);
-  };
-
-  const handleConfirmSendToVendor = async (slot1Name: string, slot2Name: string) => {
-    if (!sendToVendorShootId) return;
-    
-    const shoot = shoots.find(s => s.id === sendToVendorShootId);
+  const handleSendToVendor = async (shootId: string) => {
+    const shoot = shoots.find(s => s.id === shootId);
     if (shoot) {
-      const updatedShoot = { 
-        ...shoot, 
-        status: 'with_vendor' as ShootStatus,
-        // Store vendor names for future reference
-        vendorNames: { slot1: slot1Name, slot2: slot2Name }
-      };
+      const updatedShoot = { ...shoot, status: 'with_vendor' as ShootStatus };
       
       // Save to API first
       await saveShootToAPI(updatedShoot);
       
       setShoots(prev => prev.map(s => 
-        s.id === sendToVendorShootId ? updatedShoot : s
+        s.id === shootId ? updatedShoot : s
       ));
       
       // Trigger email notification
       triggerEmail(
-        sendToVendorShootId, 
+        shootId, 
         shoot.name, 
         'sent_to_vendor', 
         shoot.requestor.email || 'anish@company.com'
       );
       
-      addActivityToShoot(sendToVendorShootId, 'Sent to Vendors', `Equipment request sent to ${slot1Name} and ${slot2Name} for quotation`);
+      addActivityToShoot(shootId, 'Sent to Vendor', 'Equipment request sent to Gopala Media for quotation');
     }
   };
 
@@ -2039,19 +2021,6 @@ function AppContent() {
           />
         ))}
       </div>
-
-      {/* Send to Vendor Modal */}
-      {sendToVendorShootId && (() => {
-        const shoot = shoots.find(s => s.id === sendToVendorShootId);
-        return shoot ? (
-          <SendToVendorModal
-            shootId={shoot.id}
-            requestGroupId={shoot.requestGroupId}
-            onConfirm={handleConfirmSendToVendor}
-            onClose={() => setSendToVendorShootId(null)}
-          />
-        ) : null;
-      })()}
 
       {/* Email Thread Modal */}
       {selectedEmailThread && (
