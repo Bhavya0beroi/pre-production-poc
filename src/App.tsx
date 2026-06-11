@@ -13,6 +13,7 @@ import { LoginPage } from './components/LoginPage';
 import { EditShootForm } from './components/EditShootForm';
 import { RolePanel } from './components/RolePanel';
 import { SlackSettings } from './components/SlackSettings';
+import { SendToVendorConfirmModal } from './components/SendToVendorConfirmModal';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DEFAULT_RECIPIENTS } from './services/emailService';
 import {
@@ -233,6 +234,7 @@ function AppContent() {
   const [toastNotifications, setToastNotifications] = useState<Notification[]>([]);
   const [selectedEmailThread, setSelectedEmailThread] = useState<Notification | null>(null);
   const [emailSentModal, setEmailSentModal] = useState<EmailMessage | null>(null);
+  const [sendToVendorShootId, setSendToVendorShootId] = useState<string | null>(null);
 
   // Helper function to create email messages for a thread
   const createEmailThread = (shootName: string, requestorEmail: string): EmailMessage[] => {
@@ -1142,32 +1144,38 @@ function AppContent() {
     return () => clearInterval(interval);
   }, [shoots]);
 
-  const handleSendToVendor = async (shootId: string) => {
-    const shoot = shoots.find(s => s.id === shootId);
+  const handleSendToVendor = (shootId: string) => {
+    // Open modal to show vendor link
+    setSendToVendorShootId(shootId);
+  };
+
+  const handleConfirmSendToVendor = async () => {
+    if (!sendToVendorShootId) return;
+    
+    const shoot = shoots.find(s => s.id === sendToVendorShootId);
     if (shoot) {
-      // Update status to with_vendor and open the vendor form
+      // Update status to with_vendor
       const updatedShoot = { ...shoot, status: 'with_vendor' as ShootStatus };
       
       // Save to API first
       await saveShootToAPI(updatedShoot);
       
       setShoots(prev => prev.map(s => 
-        s.id === shootId ? updatedShoot : s
+        s.id === sendToVendorShootId ? updatedShoot : s
       ));
       
-      // Open the vendor quote form
-      setSelectedShootId(shootId);
-      setViewMode('vendor');
-      
-      // Trigger email notification
+      // Trigger email notification to vendor with link
       triggerEmail(
-        shootId, 
+        sendToVendorShootId, 
         shoot.name, 
         'sent_to_vendor', 
         shoot.requestor.email || 'anish@company.com'
       );
       
-      addActivityToShoot(shootId, 'Sent to Vendor', 'Equipment request sent to Gopala Media for quotation');
+      addActivityToShoot(sendToVendorShootId, 'Sent to Vendor', 'Equipment request sent to Gopala Media for quotation.');
+      
+      // Close modal
+      setSendToVendorShootId(null);
     }
   };
 
@@ -2026,6 +2034,19 @@ function AppContent() {
           />
         ))}
       </div>
+
+      {/* Send to Vendor Confirmation Modal */}
+      {sendToVendorShootId && (() => {
+        const shoot = shoots.find(s => s.id === sendToVendorShootId);
+        return shoot ? (
+          <SendToVendorConfirmModal
+            shootId={shoot.id}
+            shootName={shoot.name}
+            onConfirm={handleConfirmSendToVendor}
+            onClose={() => setSendToVendorShootId(null)}
+          />
+        ) : null;
+      })()}
 
       {/* Email Thread Modal */}
       {selectedEmailThread && (
