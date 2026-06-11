@@ -358,13 +358,9 @@ export function MainDashboard({
     }
     if (shoot.status === 'with_vendor') {
       return (
-        <button
-          onClick={() => onSendToVendor(shoot.id)}
-          className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
-          style={{ backgroundColor: '#2D60FF' }}
-        >
-          Send to Vendors
-        </button>
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap" style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+          Waiting for Quote
+        </span>
       );
     }
     if (shoot.status === 'new_request') {
@@ -374,7 +370,7 @@ export function MainDashboard({
           className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
-          Send to Vendors
+          Send to Vendor
         </button>
       );
     }
