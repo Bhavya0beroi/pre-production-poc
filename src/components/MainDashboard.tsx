@@ -8,9 +8,6 @@ import {
   Plus,
   Upload,
   X,
-  Copy,
-  Mail,
-  Link,
   ExternalLink,
   LogOut,
   User,
@@ -70,10 +67,6 @@ export function MainDashboard({
 }: MainDashboardProps) {
   const [activeNav, setActiveNav] = useState<NavItem>('active');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
-  const [showSendToVendorModal, setShowSendToVendorModal] = useState(false);
-  const [selectedShootForVendor, setSelectedShootForVendor] = useState<Shoot | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-
   // Quick Notify state
   const [slackWebhook, setSlackWebhook] = useState('');
   const [slackMembers, setSlackMembers] = useState<{ name: string; slack_id: string }[]>([]);
@@ -149,29 +142,6 @@ export function MainDashboard({
     }
   };
 
-  const openSendToVendorModal = (shoot: Shoot) => {
-    setSelectedShootForVendor(shoot);
-    setShowSendToVendorModal(true);
-    setLinkCopied(false);
-  };
-
-  const handleCopyLink = () => {
-    if (selectedShootForVendor) {
-      const vendorLink = `${window.location.origin}?vendor=${selectedShootForVendor.id}`;
-      navigator.clipboard.writeText(vendorLink);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    }
-  };
-
-  const handleConfirmSendToVendor = () => {
-    if (selectedShootForVendor) {
-      onSendToVendor(selectedShootForVendor.id);
-      setShowSendToVendorModal(false);
-      setSelectedShootForVendor(null);
-    }
-  };
-
   // Helper to count unique request groups (multi-shoots count as 1)
   const getGroupedCountForStatus = (status: string) => {
     const filtered = shoots.filter(s => s.status === status);
@@ -191,13 +161,13 @@ export function MainDashboard({
 
   const approvalsPending = getGroupedCountForStatus('with_swati');
 
-  // Count all active (non-completed) shoots - grouped
-  const allActiveFiltered = shoots.filter(s => 
-    s.status === 'pending_invoice' || 
-    s.status === 'with_swati' || 
+  // Count all active (non-completed) shoots - grouped (excludes shoots with PDFs uploaded)
+  const allActiveFiltered = shoots.filter(s =>
+    s.status === 'with_swati' ||
     s.status === 'with_vendor' ||
     s.status === 'new_request' ||
-    s.status === 'ready_for_shoot'
+    s.status === 'ready_for_shoot' ||
+    (s.status === 'pending_invoice' && !s.invoiceFile)
   );
   const allActiveGroupIds = new Set<string>();
   let allActiveStandalone = 0;
@@ -238,7 +208,19 @@ export function MainDashboard({
     { 
       id: 'pending_invoice' as FilterType, 
       title: 'Pending Invoice', 
-      count: getGroupedCountForStatus('pending_invoice'),
+      count: (() => {
+        const filtered = shoots.filter(s => s.status === 'pending_invoice' && !s.invoiceFile);
+        const groupIds = new Set<string>();
+        let standaloneCount = 0;
+        filtered.forEach(s => {
+          if (s.requestGroupId) {
+            groupIds.add(s.requestGroupId);
+          } else {
+            standaloneCount++;
+          }
+        });
+        return groupIds.size + standaloneCount;
+      })(),
       color: '#9B51E0' 
     },
   ];
@@ -287,7 +269,6 @@ export function MainDashboard({
     
     if (selectedFilter === 'all') {
       filtered = shoots.filter(s => 
-        s.status === 'pending_invoice' || 
         s.status === 'with_swati' || 
         s.status === 'with_vendor' ||
         s.status === 'new_request' ||
@@ -300,7 +281,7 @@ export function MainDashboard({
     } else if (selectedFilter === 'active_shoots') {
       filtered = shoots.filter(s => s.status === 'ready_for_shoot');
     } else if (selectedFilter === 'pending_invoice') {
-      filtered = shoots.filter(s => s.status === 'pending_invoice');
+      filtered = shoots.filter(s => s.status === 'pending_invoice' && !s.invoiceFile);
     }
     
     // Group multi-shoot requests
@@ -378,22 +359,22 @@ export function MainDashboard({
     if (shoot.status === 'with_vendor') {
       return (
         <button
-          onClick={() => onOpenVendorLink(shoot.id)}
+          onClick={() => onSendToVendor(shoot.id)}
           className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
-          Send to Vendor
+          Send to Vendors
         </button>
       );
     }
     if (shoot.status === 'new_request') {
       return (
         <button
-          onClick={() => onOpenVendorLink(shoot.id)}
+          onClick={() => onSendToVendor(shoot.id)}
           className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 whitespace-nowrap"
           style={{ backgroundColor: '#2D60FF' }}
         >
-          Send to Vendor
+          Send to Vendors
         </button>
       );
     }
@@ -786,111 +767,6 @@ export function MainDashboard({
         </div>
       </div>
 
-      {/* Send to Vendor Modal */}
-      {showSendToVendorModal && selectedShootForVendor && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-4 z-50">
-          <div 
-            className="bg-white rounded-2xl max-h-[85vh] overflow-hidden flex flex-col"
-            style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)', width: '500px' }}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Send to Vendor</h2>
-                <p className="text-sm text-gray-500">Share equipment request with vendor</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowSendToVendorModal(false);
-                  setSelectedShootForVendor(null);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-auto px-6 py-5">
-              {/* Shoot Info */}
-              <div className="p-4 rounded-xl bg-gray-50 mb-5">
-                <div className="font-medium text-gray-900 mb-1">{selectedShootForVendor.name}</div>
-                <div className="text-sm text-gray-500">{selectedShootForVendor.date} • {selectedShootForVendor.location}</div>
-                <div className="text-sm text-gray-500 mt-2">{selectedShootForVendor.equipment.length} equipment items</div>
-              </div>
-
-              {/* Vendor Link */}
-              <div className="mb-5">
-                <div className="text-sm font-medium text-gray-700 mb-2">Vendor Quote Link</div>
-                <div 
-                  className="flex items-center gap-3 p-3 rounded-lg border border-gray-200"
-                  style={{ backgroundColor: '#F8FAFC' }}
-                >
-                  <div className="flex-1 flex items-center gap-2 overflow-hidden">
-                    <Link className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <span className="text-sm text-gray-600 truncate">
-                      {window.location.origin}?vendor={selectedShootForVendor.id}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleCopyLink}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
-                    style={{ 
-                      backgroundColor: linkCopied ? '#E8F5E9' : '#EFF6FF',
-                      color: linkCopied ? '#27AE60' : '#2D60FF'
-                    }}
-                  >
-                    <Copy className="w-4 h-4" />
-                    {linkCopied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Equipment List */}
-              <div className="mb-5">
-                <div className="text-sm font-medium text-gray-700 mb-2">Equipment Requested</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {selectedShootForVendor.equipment.map((item) => (
-                    <div key={item.id} className="flex items-center py-2 px-3 bg-gray-50 rounded-lg">
-                      <span className="text-sm text-gray-900">{item.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Info Note */}
-              <div className="p-4 rounded-xl" style={{ backgroundColor: '#EFF6FF' }}>
-                <p className="text-sm" style={{ color: '#2D60FF' }}>
-                  <strong>How it works:</strong> Share the vendor link with Gopala Media. They will fill out the quote form with pricing. Once submitted, you'll see it in the "Approvals Pending" section.
-                </p>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-100">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowSendToVendorModal(false);
-                    setSelectedShootForVendor(null);
-                  }}
-                  className="flex-1 px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmSendToVendor}
-                  className="flex-1 px-5 py-2.5 rounded-lg text-white transition-colors font-medium flex items-center justify-center gap-2 hover:opacity-90"
-                  style={{ backgroundColor: '#2D60FF' }}
-                >
-                  <Mail className="w-4 h-4" />
-                  Confirm & Send
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
