@@ -1440,19 +1440,20 @@ function AppContent() {
   const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) return;
-    
-    const updatedShoot = { 
+
+    const updatedShoot = {
       ...shoot,
+      status: 'pending_invoice' as ShootStatus,
             invoiceFile: {
               name: fileName,
         url: '#',
         data: fileData // Store base64 PDF data
       }
     };
-    
+
     // Save to API first
     await saveShootToAPI(updatedShoot);
-    
+
     setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
     
     // Send invoice uploaded email via SMTP to finance
