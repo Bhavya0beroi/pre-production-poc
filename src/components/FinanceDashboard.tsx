@@ -1184,11 +1184,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                     </div>
                                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                       {invoice.invoiceFile && (
-                                        <button onClick={() => openPdfViewer(invoice)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View">
+                                        <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50" title="View & Manage Invoice">
                                     <FileText className="w-4 h-4" />
                                   </button>
                                 )}
-                                      <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Replace PDF' : 'Upload PDF'}>
+                                      <button onClick={() => onUploadInvoice(invoice.id)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100" title={invoice.invoiceFile ? 'Manage Invoice' : 'Upload PDF'}>
                                         <Upload className="w-4 h-4" />
                                       </button>
                                     </div>
@@ -1206,11 +1206,11 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                                         </div>
                                         <div className="flex items-center gap-3">
                                           <button
-                                            onClick={(e) => { e.stopPropagation(); openPdfViewer(invoice); }}
+                                            onClick={(e) => { e.stopPropagation(); onUploadInvoice(invoice.id); }}
                                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
                                           >
                                             <FileText className="w-4 h-4" />
-                                            View Invoice PDF
+                                            Manage Invoice & Payment
                                           </button>
                                           <span className="text-sm text-gray-500">{invoice.invoiceFile.name}</span>
                                         </div>
