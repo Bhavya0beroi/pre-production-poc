@@ -738,7 +738,8 @@ function AppContent() {
         // Process shoots
         if (shootsResponse.ok) {
           const shootsData = await shootsResponse.json();
-          if (Array.isArray(shootsData)) {
+          console.log('📦 Raw shoots data from API:', shootsData.length, 'shoots');
+          if (Array.isArray(shootsData) && shootsData.length > 0) {
             const formattedShoots: Shoot[] = shootsData.map((s: any) => {
               // Parse approval_email: if it's a JSON string, parse it; otherwise use as-is
               let approvalEmail = s.approval_email;
@@ -783,7 +784,15 @@ function AppContent() {
             });
             setShoots(formattedShoots);
             console.log('✅ Loaded', formattedShoots.length, 'shoots from API');
+            console.log('📊 First shoot:', formattedShoots[0]?.name);
+          } else if (Array.isArray(shootsData) && shootsData.length === 0) {
+            console.warn('⚠️ API returned empty array - database might be empty');
+            setShoots([]);
+          } else {
+            console.error('❌ API returned invalid data format:', typeof shootsData);
           }
+        } else {
+          console.error('❌ Shoots API request failed:', shootsResponse.status, shootsResponse.statusText);
         }
 
         // Process catalog
@@ -807,11 +816,20 @@ function AppContent() {
         }
       } catch (error) {
         console.error('❌ API fetch error:', error);
+        console.error('   Full error details:', error);
+        
+        // If API fails, try to use localStorage as fallback
+        const cachedData = loadFromStorage(STORAGE_KEYS.SHOOTS, []);
+        if (cachedData.length === 0) {
+          // No cached data and API failed - show error to user
+          console.warn('⚠️ No data available: API failed and localStorage is empty');
+        }
       } finally {
         setIsLoadingData(false);
       }
     };
 
+    // Force reload data from API every time, don't rely on localStorage
     loadDataFromAPI();
   }, []);
 
