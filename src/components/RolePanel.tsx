@@ -3,9 +3,11 @@ import ReactDOM from 'react-dom';
 import {
   Users, Plus, Trash2, KeyRound, X,
   AlertCircle, CheckCircle2, Eye, EyeOff,
-  LayoutDashboard, CheckCircle, DollarSign, Package, Archive, Zap,
+  LayoutDashboard, CheckCircle, DollarSign, Package, Archive, Zap, Wrench,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { resolveModuleAccess, MEMBER_DEFAULT_MODULE_ACCESS, FULL_MODULE_ACCESS, type ModuleAccess, type ModuleKey } from '../lib/modules';
+import { updateModuleAccess } from '../services/repairService';
 
 const API_URL = import.meta.env.DEV
   ? 'http://localhost:3001'
@@ -20,6 +22,7 @@ interface UserRecord {
   name: string;
   role: UserRole;
   department: string;
+  module_access?: ModuleAccess | string | null;
   created_at?: string;
 }
 
@@ -31,8 +34,11 @@ export interface RolePanelProps {
   onOpenCatalog?: () => void;
   onOpenArchive?: () => void;
   onOpenSlackSettings?: () => void;
+  onOpenRepairs?: () => void;
   approvalsPending?: number;
 }
+
+const GRID_COLUMNS = '1fr 150px 140px 200px 100px';
 
 const ROLE_COLORS: Record<UserRole, { bg: string; text: string; border: string }> = {
   user:        { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
@@ -42,7 +48,13 @@ const ROLE_COLORS: Record<UserRole, { bg: string; text: string; border: string }
 
 interface AddMemberForm {
   name: string; email: string; password: string; role: UserRole; department: string;
+  moduleAccess: ModuleAccess;
 }
+
+const EMPTY_ADD_FORM: AddMemberForm = {
+  name: '', email: '', password: '', role: 'user', department: '',
+  moduleAccess: { shoots: true, repairs: false },
+};
 
 const SEED_USERS: UserRecord[] = [
   { email: 'bhavya.oberoi@learnapp.co',  name: 'Bhavya Oberoi',  role: 'super_admin', department: '' },
@@ -81,20 +93,19 @@ function Modal({ children }: { children: React.ReactNode }) {
 
 export function RolePanel({
   onBack, currentUserEmail,
-  onOpenApprovals, onOpenFinance, onOpenCatalog, onOpenArchive, onOpenSlackSettings,
+  onOpenApprovals, onOpenFinance, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRepairs,
   approvalsPending = 0,
 }: RolePanelProps) {
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, moduleAccess } = useAuth();
   const canManage = isAdmin || isSuperAdmin;
+  const [moduleErrors, setModuleErrors] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState<AddMemberForm>({
-    name: '', email: '', password: '', role: 'user', department: '',
-  });
+  const [addForm, setAddForm] = useState<AddMemberForm>({ ...EMPTY_ADD_FORM, moduleAccess: { ...EMPTY_ADD_FORM.moduleAccess } });
   const [addingUser, setAddingUser] = useState(false);
   const [showAddPassword, setShowAddPassword] = useState(false);
 
@@ -127,8 +138,13 @@ export function RolePanel({
   }, []);
 
   const handleRoleChange = async (email: string, newRole: UserRole) => {
-    const updated = users.map(u => u.email === email ? { ...u, role: newRole } : u);
+    // Promoting to admin unlocks every module; demoting back to member resets to Shoots only.
+    const nextAccess = newRole === 'user' ? MEMBER_DEFAULT_MODULE_ACCESS : FULL_MODULE_ACCESS;
+    const updated = users.map(u =>
+      u.email === email ? { ...u, role: newRole, module_access: { ...nextAccess } } : u
+    );
     setUsers(updated);
+    setModuleErrors(p => { const n = { ...p }; delete n[email]; return n; });
     if (usingLocal) { saveLocalUsers(updated); showToast('success', 'Role updated.'); return; }
     try {
       const res = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/role`, {
@@ -138,6 +154,40 @@ export function RolePanel({
       if (!res.ok) throw new Error();
       showToast('success', 'Role updated.');
     } catch { showToast('error', 'Failed to update role.'); }
+  };
+
+  const handleModuleToggle = async (user: UserRecord, moduleKey: ModuleKey) => {
+    const current = resolveModuleAccess(user.role, user.module_access ?? null);
+    const next: ModuleAccess = { ...current, [moduleKey]: !current[moduleKey] };
+
+    if (!next.shoots && !next.repairs) {
+      setModuleErrors(p => ({ ...p, [user.email]: 'A member needs access to at least one module.' }));
+      return;
+    }
+
+    setModuleErrors(p => { const n = { ...p }; delete n[user.email]; return n; });
+    
+    if (usingLocal) { 
+      const updated = users.map(u => u.email === user.email ? { ...u, module_access: next } : u);
+      setUsers(updated);
+      saveLocalUsers(updated); 
+      showToast('success', 'Module access updated.');
+      return; 
+    }
+
+    // Optimistic update for database mode
+    const updated = users.map(u => u.email === user.email ? { ...u, module_access: next } : u);
+    setUsers(updated);
+
+    try {
+      await updateModuleAccess(user.email, next);
+      showToast('success', 'Module access updated.');
+    } catch (e: any) {
+      // Revert on error
+      setUsers(users);
+      showToast('error', e.message || 'Failed to update module access.');
+      console.error('Module access update failed:', e);
+    }
   };
 
   const handleAddMember = async () => {
@@ -150,20 +200,20 @@ export function RolePanel({
       const updated = [...users, nu];
       setUsers(updated); saveLocalUsers(updated);
       setShowAddModal(false);
-      setAddForm({ name: '', email: '', password: '', role: 'user', department: '' });
+      setAddForm({ ...EMPTY_ADD_FORM });
       showToast('success', `${nu.name} added.`);
       setAddingUser(false); return;
     }
     try {
       const res = await fetch(`${API_URL}/api/users`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({ ...addForm, module_access: addForm.moduleAccess }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
       const nu = await res.json();
       setUsers(p => [...p, nu]);
       setShowAddModal(false);
-      setAddForm({ name: '', email: '', password: '', role: 'user', department: '' });
+      setAddForm({ ...EMPTY_ADD_FORM });
       showToast('success', `${nu.name} added.`);
     } catch (e: any) { showToast('error', e.message || 'Failed.'); }
     finally { setAddingUser(false); }
@@ -239,9 +289,16 @@ export function RolePanel({
           <h2 className="text-white text-xl">ShootFlow</h2>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
-            <LayoutDashboard className="w-5 h-5" /><span>Active Shoots</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <LayoutDashboard className="w-5 h-5" /><span>Active Shoots</span>
+            </button>
+          )}
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button onClick={onOpenRepairs} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Wrench className="w-5 h-5" /><span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
           {canManage && (
             <button onClick={onOpenApprovals} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left relative hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
               <CheckCircle className="w-5 h-5" /><span>Approvals</span>
@@ -255,9 +312,11 @@ export function RolePanel({
           <button onClick={onOpenFinance} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <DollarSign className="w-5 h-5" /><span>Finance & Invoices</span>
           </button>
-          <button onClick={onOpenCatalog} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
-            <Package className="w-5 h-5" /><span>Catalog</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button onClick={onOpenCatalog} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Package className="w-5 h-5" /><span>Catalog</span>
+            </button>
+          )}
           <button onClick={onOpenArchive} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <Archive className="w-5 h-5" /><span>Archive</span>
           </button>
@@ -315,8 +374,8 @@ export function RolePanel({
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               {/* Table head */}
               <div className="grid px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100"
-                style={{ gridTemplateColumns: '1fr 180px 180px 100px' }}>
-                <span>User</span><span>Role</span><span>Department</span>
+                style={{ gridTemplateColumns: GRID_COLUMNS }}>
+                <span>User</span><span>Role</span><span>Department</span><span>Module Access</span>
                 <span className="text-right">Actions</span>
               </div>
 
@@ -325,7 +384,7 @@ export function RolePanel({
                   const c = ROLE_COLORS[u.role];
                   return (
                     <div key={u.email} className="grid px-6 py-4 items-center hover:bg-gray-50/60"
-                      style={{ gridTemplateColumns: '1fr 180px 180px 100px' }}>
+                      style={{ gridTemplateColumns: GRID_COLUMNS }}>
 
                       {/* User */}
                       <div className="flex items-center gap-3">
@@ -375,6 +434,48 @@ export function RolePanel({
                       {/* Department */}
                       <div className="text-gray-500 text-sm">{u.department || '—'}</div>
 
+                      {/* Module Access — admins always hold both, members can be limited */}
+                      {(() => {
+                        const access = resolveModuleAccess(u.role, u.module_access ?? null);
+                        const locked = u.role !== 'user' || !canManage;
+                        const lockReason = u.role !== 'user' ? 'Admins have access to all modules.' : undefined;
+                        const error = moduleErrors[u.email];
+                        return (
+                          <div title={lockReason}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                              {([
+                                { key: 'shoots' as ModuleKey, label: 'Shoots' },
+                                { key: 'repairs' as ModuleKey, label: 'Repairs' },
+                              ]).map(m => (
+                                <label
+                                  key={m.key}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '14px',
+                                    color: locked ? '#9CA3AF' : '#374151',
+                                    cursor: locked ? 'not-allowed' : 'pointer',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={access[m.key]}
+                                    disabled={locked}
+                                    onChange={() => handleModuleToggle(u, m.key)}
+                                    style={{ width: 16, height: 16, accentColor: '#2D60FF', cursor: locked ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                                  />
+                                  {m.label}
+                                </label>
+                              ))}
+                            </div>
+                            {error && (
+                              <div className="text-xs mt-1" style={{ color: '#DC2626' }}>{error}</div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* Actions — only admin/superAdmin can manage */}
                       <div className="flex items-center justify-end gap-2">
                         {canManage ? (
@@ -418,7 +519,7 @@ export function RolePanel({
                 <h2 style={{ fontSize: 18, fontWeight: 600, color: '#111827', margin: 0 }}>Add Team Member</h2>
                 <p style={{ fontSize: 13, color: '#9CA3AF', margin: '4px 0 0' }}>Share the email + password with them directly.</p>
               </div>
-              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>
+              <button onClick={() => { setShowAddModal(false); setAddForm({ ...EMPTY_ADD_FORM }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>
                 <X style={{ width: 18, height: 18 }} />
               </button>
             </div>
@@ -455,7 +556,11 @@ export function RolePanel({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Role</label>
-                  <select value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value as UserRole }))}
+                  <select value={addForm.role} onChange={e => {
+                    const r = e.target.value as UserRole;
+                    const ma = resolveModuleAccess(r, MEMBER_DEFAULT_MODULE_ACCESS);
+                    setAddForm(p => ({ ...p, role: r, moduleAccess: ma }));
+                  }}
                     style={{ width: '100%', padding: '10px 14px', border: '1px solid #E5E7EB', borderRadius: 12, fontSize: 14, color: '#111827', background: '#F9FAFB', outline: 'none' }}>
                     <option value="user">Member</option>
                     <option value="admin">Admin</option>
@@ -474,9 +579,56 @@ export function RolePanel({
                   </select>
                 </div>
               </div>
+              {/* Module Access */}
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Module Access</label>
+                {(addForm.role === 'admin') ? (
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {(['shoots', 'repairs'] as ModuleKey[]).map(mod => (
+                      <div key={mod} title="Admins have access to all modules." style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, border: '1px solid #E5E7EB', background: '#F9FAFB', opacity: 0.65, cursor: 'not-allowed' }}>
+                        <input type="checkbox" checked readOnly style={{ width: 15, height: 15, accentColor: '#2D60FF', cursor: 'not-allowed' }} />
+                        <span style={{ fontSize: 13, color: '#374151', fontWeight: 500, textTransform: 'capitalize' }}>
+                          {mod === 'shoots' ? '🎬 Shoots' : '🔧 Repairs'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {(['shoots', 'repairs'] as ModuleKey[]).map(mod => {
+                      const checked = !!addForm.moduleAccess?.[mod];
+                      const isLast = checked && Object.values(addForm.moduleAccess).filter(Boolean).length === 1;
+                      const otherMod = mod === 'shoots' ? 'repairs' : 'shoots';
+                      return (
+                        <div key={mod} onClick={() => {
+                          if (isLast) {
+                            // swap to the other module instead of blocking
+                            setAddForm(p => ({ ...p, moduleAccess: { ...p.moduleAccess, [mod]: false, [otherMod]: true } }));
+                          } else {
+                            setAddForm(p => ({ ...p, moduleAccess: { ...p.moduleAccess, [mod]: !p.moduleAccess[mod] } }));
+                          }
+                        }} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, border: `1px solid ${checked ? '#BFDBFE' : '#E5E7EB'}`, background: checked ? '#EFF6FF' : '#F9FAFB', cursor: 'pointer', userSelect: 'none' }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {}}
+                            style={{ width: 15, height: 15, accentColor: '#2D60FF', pointerEvents: 'none' }}
+                          />
+                          <span style={{ fontSize: 13, color: checked ? '#1D4ED8' : '#6B7280', fontWeight: 500 }}>
+                            {mod === 'shoots' ? '🎬 Shoots' : '🔧 Repairs'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 6 }}>
+                  {addForm.role === 'admin' ? 'Admins have full access to all modules.' : 'At least one module must be selected.'}
+                </p>
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, padding: '0 24px 24px' }}>
-              <button onClick={() => setShowAddModal(false)} style={{ padding: '10px 20px', borderRadius: 12, border: '1px solid #E5E7EB', background: 'white', fontSize: 14, color: '#374151', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => { setShowAddModal(false); setAddForm({ ...EMPTY_ADD_FORM }); }} style={{ padding: '10px 20px', borderRadius: 12, border: '1px solid #E5E7EB', background: 'white', fontSize: 14, color: '#374151', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleAddMember} disabled={addingUser} style={{ padding: '10px 20px', borderRadius: 12, border: 'none', background: '#2D60FF', color: 'white', fontSize: 14, fontWeight: 500, cursor: 'pointer', opacity: addingUser ? 0.6 : 1 }}>
                 {addingUser ? 'Creating…' : 'Create Account'}
               </button>

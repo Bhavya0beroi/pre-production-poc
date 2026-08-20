@@ -11,7 +11,8 @@ import {
   Trash2, 
   X,
   Zap,
-  Users
+  Users,
+  Wrench
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -33,6 +34,7 @@ interface EquipmentCatalogManagerProps {
   approvalsPending?: number;
   onOpenSlackSettings?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
 }
 
 export function EquipmentCatalogManager({ 
@@ -45,8 +47,9 @@ export function EquipmentCatalogManager({
   approvalsPending = 0,
   onOpenSlackSettings,
   onOpenRolePanel,
+  onOpenRepairs,
 }: EquipmentCatalogManagerProps) {
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, moduleAccess } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
@@ -185,6 +188,17 @@ export function EquipmentCatalogManager({
             <LayoutDashboard className="w-5 h-5" />
             <span>Active Shoots</span>
           </button>
+
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button
+              onClick={onOpenRepairs}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Wrench className="w-5 h-5" />
+              <span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenApprovals}

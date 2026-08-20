@@ -18,9 +18,11 @@ import {
   Edit3,
   Bell,
   Send,
-  Loader
+  Loader,
+  Wrench
 } from 'lucide-react';
 import type { Shoot } from '../App';
+import { useAuth } from '../context/AuthContext';
 
 interface MainDashboardProps {
   shoots: Shoot[];
@@ -34,6 +36,7 @@ interface MainDashboardProps {
   onOpenArchive: () => void;
   onOpenRolePanel?: () => void;
   onOpenSlackSettings?: () => void;
+  onOpenRepairs?: () => void;
   // Auth props
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
@@ -58,6 +61,7 @@ export function MainDashboard({
   onOpenArchive,
   onOpenRolePanel,
   onOpenSlackSettings,
+  onOpenRepairs,
   isAdmin = false,
   isSuperAdmin = false,
   userName = 'User',
@@ -65,6 +69,7 @@ export function MainDashboard({
   onLogout,
   onEditShoot
 }: MainDashboardProps) {
+  const { moduleAccess } = useAuth();
   const [activeNav, setActiveNav] = useState<NavItem>('active');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
   // Quick Notify state
@@ -410,6 +415,17 @@ export function MainDashboard({
             <LayoutDashboard className="w-5 h-5" />
             <span>Active Shoots</span>
           </button>
+
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button
+              onClick={onOpenRepairs}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Wrench className="w-5 h-5" />
+              <span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
 
           <button
             onClick={() => {

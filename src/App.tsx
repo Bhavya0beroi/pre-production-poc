@@ -14,6 +14,18 @@ import { EditShootForm } from './components/EditShootForm';
 import { RolePanel } from './components/RolePanel';
 import { SlackSettings } from './components/SlackSettings';
 import { SendToVendorConfirmModal } from './components/SendToVendorConfirmModal';
+import { RepairsDashboard } from './components/RepairsDashboard';
+import { CreateRepairRequestModal } from './components/CreateRepairRequestModal';
+import {
+  fetchRepairs,
+  createRepair,
+  updateRepair,
+  approveRepair,
+  rejectRepair,
+  notifyRepair,
+  type RepairDraft,
+  type RepairRequest,
+} from './services/repairService';
 import { isSupabaseConfigured } from './lib/supabase';
 import { DEFAULT_RECIPIENTS } from './services/emailService';
 import {
@@ -100,7 +112,7 @@ export interface Shoot {
   slackApprovalMentions?: { label: string; slack_id: string }[];
 }
 
-export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot' | 'role_panel' | 'slack_settings';
+export type ViewMode = 'dashboard' | 'vendor' | 'approval' | 'invoice' | 'new_request' | 'finance' | 'catalog' | 'archive' | 'edit_shoot' | 'role_panel' | 'slack_settings' | 'repairs';
 
 // LocalStorage keys - v2 to clear old data
 const STORAGE_KEYS = {
@@ -157,7 +169,7 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 };
 
 function AppContent() {
-  const { isAuthenticated, isAdmin, isSuperAdmin, user, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, user, logout, moduleAccess } = useAuth();
   
   // Check if this is a vendor link (opens form only) - vendors don't need login
   const urlParams = new URLSearchParams(window.location.search);
@@ -190,6 +202,7 @@ function AppContent() {
         finance: 'finance',
         catalog: 'catalog',
         archive: 'archive',
+        repairs: 'repairs',
       };
       if (viewMap[deepView]) return viewMap[deepView];
     }
@@ -226,6 +239,68 @@ function AppContent() {
       localStorage.removeItem(STORAGE_KEYS.SELECTED_SHOOT);
     }
   }, [selectedShootId]);
+
+  // ── IT Assets & Repairs module ──────────────────────────────────
+  const [repairs, setRepairs] = useState<RepairRequest[]>([]);
+  const [repairsError, setRepairsError] = useState<string | null>(null);
+  const [showRepairModal, setShowRepairModal] = useState(false);
+  const [editingRepairId, setEditingRepairId] = useState<string | null>(null);
+
+  const loadRepairs = useCallback(async () => {
+    if (!user?.email || !moduleAccess.repairs) return;
+    try {
+      setRepairs(await fetchRepairs(user.email));
+      setRepairsError(null);
+    } catch (error: any) {
+      console.error('Failed to load repair requests:', error);
+      setRepairsError(error?.message || 'Could not load repair requests.');
+    }
+  }, [user?.email, moduleAccess.repairs]);
+
+  useEffect(() => { loadRepairs(); }, [loadRepairs]);
+
+  // Members can only land on a module they hold. Shoots-only users are unaffected.
+  useEffect(() => {
+    const shootsViews: ViewMode[] = ['dashboard', 'new_request', 'edit_shoot', 'catalog', 'invoice'];
+    if (!moduleAccess.shoots && shootsViews.includes(viewMode)) {
+      setViewMode(moduleAccess.repairs ? 'repairs' : 'archive');
+    }
+    if (!moduleAccess.repairs && viewMode === 'repairs') {
+      setViewMode('dashboard');
+    }
+  }, [moduleAccess.shoots, moduleAccess.repairs, viewMode]);
+
+  const editingRepair = repairs.find(r => r.id === editingRepairId) || null;
+
+  const closeRepairModal = () => {
+    setShowRepairModal(false);
+    setEditingRepairId(null);
+  };
+
+  const handleSubmitRepair = async (draft: RepairDraft) => {
+    // The server owns the auto-approve vs. needs-approval decision and the Slack message.
+    if (editingRepairId) {
+      await updateRepair(user?.email, editingRepairId, draft);
+    } else {
+      await createRepair(user?.email, draft);
+    }
+    await loadRepairs();
+    closeRepairModal();
+  };
+
+  const handleApproveRepair = async (repairId: string) => {
+    await approveRepair(user?.email, repairId);
+    await loadRepairs();
+  };
+
+  const handleRejectRepair = async (repairId: string, reason: string) => {
+    await rejectRepair(user?.email, repairId, reason);
+    await loadRepairs();
+  };
+
+  const handleNotifyRepair = async (repairId: string, target: { name: string; slackUserId?: string }) => {
+    await notifyRepair(user?.email, repairId, target);
+  };
   
   // Notification system state - load from localStorage
   const [notifications, setNotifications] = useState<Notification[]>(() => 
@@ -1829,6 +1904,7 @@ function AppContent() {
           onOpenArchive={() => setViewMode('archive')}
           onOpenRolePanel={() => setViewMode('role_panel')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRepairs={() => setViewMode('repairs')}
           // Auth props
           isAdmin={isAdmin}
           isSuperAdmin={isSuperAdmin}
@@ -1891,7 +1967,39 @@ function AppContent() {
           onOpenArchive={() => setViewMode('archive')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
           onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenRepairs={() => setViewMode('repairs')}
+          repairs={repairs}
+          onApproveRepair={handleApproveRepair}
+          onRejectRepair={handleRejectRepair}
           isAdmin={isAdmin}
+        />
+      )}
+
+      {viewMode === 'repairs' && (
+        <RepairsDashboard
+          repairs={repairs}
+          accessError={repairsError}
+          onOpenNewRequest={() => { setEditingRepairId(null); setShowRepairModal(true); }}
+          onEditRepair={(repairId) => { setEditingRepairId(repairId); setShowRepairModal(true); }}
+          onNotifyRepair={handleNotifyRepair}
+          onBack={() => setViewMode('dashboard')}
+          onOpenApprovals={() => setViewMode('approval')}
+          onOpenFinance={() => setViewMode('finance')}
+          onOpenCatalog={() => setViewMode('catalog')}
+          onOpenArchive={() => setViewMode('archive')}
+          onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRolePanel={() => setViewMode('role_panel')}
+          approvalsPending={pendingApprovals.length}
+          onLogout={logout}
+          onRefreshRepairs={loadRepairs}
+        />
+      )}
+
+      {showRepairModal && (
+        <CreateRepairRequestModal
+          initialRepair={editingRepair}
+          onClose={closeRepairModal}
+          onSubmit={handleSubmitRepair}
         />
       )}
       
@@ -1930,6 +2038,7 @@ function AppContent() {
       {viewMode === 'finance' && (
         <FinanceDashboard 
           shoots={shoots}
+          repairs={repairs}
           onBack={() => setViewMode('dashboard')}
           onUploadInvoice={handleOpenInvoiceModal}
           onOpenApprovals={() => setViewMode('approval')}
@@ -1937,6 +2046,8 @@ function AppContent() {
           onOpenArchive={() => setViewMode('archive')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
           onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenRepairs={() => setViewMode('repairs')}
+          onRefreshRepairs={loadRepairs}
         />
       )}
 
@@ -1950,6 +2061,7 @@ function AppContent() {
           onOpenArchive={() => setViewMode('archive')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
           onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenRepairs={() => setViewMode('repairs')}
           approvalsPending={pendingApprovals.length}
         />
       )}
@@ -1963,6 +2075,7 @@ function AppContent() {
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
           onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenRepairs={() => setViewMode('repairs')}
           approvalsPending={pendingApprovals.length}
         />
       )}
@@ -2020,6 +2133,7 @@ function AppContent() {
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
           onOpenSlackSettings={() => setViewMode('slack_settings')}
+          onOpenRepairs={() => setViewMode('repairs')}
           approvalsPending={pendingApprovals.length}
         />
       )}
@@ -2032,6 +2146,7 @@ function AppContent() {
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
           onOpenRolePanel={() => setViewMode('role_panel')}
+          onOpenRepairs={() => setViewMode('repairs')}
           approvalsPending={pendingApprovals.length}
         />
       )}

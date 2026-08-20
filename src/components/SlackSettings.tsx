@@ -13,6 +13,7 @@ import {
   Package,
   Archive,
   Users,
+  Wrench,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -33,6 +34,7 @@ interface SlackSettingsProps {
   onOpenCatalog?: () => void;
   onOpenArchive?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
   approvalsPending?: number;
 }
 
@@ -56,6 +58,7 @@ export function SlackSettings({
   onOpenCatalog,
   onOpenArchive,
   onOpenRolePanel,
+  onOpenRepairs,
   approvalsPending = 0,
 }: SlackSettingsProps) {
   const { isAdmin, isSuperAdmin } = useAuth();
@@ -192,6 +195,7 @@ export function SlackSettings({
           onOpenCatalog={onOpenCatalog}
           onOpenArchive={onOpenArchive}
           onOpenRolePanel={onOpenRolePanel}
+          onOpenRepairs={onOpenRepairs}
           approvalsPending={approvalsPending}
           isAdmin={!!isAdmin}
           isSuperAdmin={!!isSuperAdmin}
@@ -213,6 +217,7 @@ export function SlackSettings({
         onOpenCatalog={onOpenCatalog}
         onOpenArchive={onOpenArchive}
         onOpenRolePanel={onOpenRolePanel}
+        onOpenRepairs={onOpenRepairs}
         approvalsPending={approvalsPending}
         isAdmin={!!isAdmin}
         isSuperAdmin={!!isSuperAdmin}
@@ -506,6 +511,7 @@ interface SidebarProps {
   onOpenCatalog?: () => void;
   onOpenArchive?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
   approvalsPending: number;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -518,10 +524,12 @@ function Sidebar({
   onOpenCatalog,
   onOpenArchive,
   onOpenRolePanel,
+  onOpenRepairs,
   approvalsPending,
   isAdmin,
   isSuperAdmin,
 }: SidebarProps) {
+  const { moduleAccess } = useAuth();
   return (
     <div className="w-64 flex flex-col flex-shrink-0" style={{ backgroundColor: '#1F2937' }}>
       {/* Logo */}
@@ -531,14 +539,27 @@ function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 px-4 py-6 space-y-2">
-        <button
-          onClick={onBack}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-          style={{ color: '#9CA3AF' }}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          <span>Active Shoots</span>
-        </button>
+        {moduleAccess.shoots && (
+          <button
+            onClick={onBack}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+            style={{ color: '#9CA3AF' }}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span>Active Shoots</span>
+          </button>
+        )}
+
+        {moduleAccess.repairs && onOpenRepairs && (
+          <button
+            onClick={onOpenRepairs}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+            style={{ color: '#9CA3AF' }}
+          >
+            <Wrench className="w-5 h-5" />
+            <span>IT Assets &amp; Repairs</span>
+          </button>
+        )}
 
         {onOpenApprovals && (
           <button
@@ -570,7 +591,7 @@ function Sidebar({
           </button>
         )}
 
-        {onOpenCatalog && (
+        {moduleAccess.shoots && onOpenCatalog && (
           <button
             onClick={onOpenCatalog}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"

@@ -2,6 +2,24 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+// Local development reads a .env file. Hosted environments inject real env vars,
+// which always win over anything found in the file.
+(function loadDotEnv() {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = rawValue.replace(/^["']|["']$/g, '');
+  }
+  console.log('🔧 Loaded local .env file');
+})();
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -10,6 +28,36 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve uploaded files statically
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'invoice-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  }
+});
 
 // ============================================
 // EMAIL CONFIGURATION (SendGrid HTTP API)
@@ -21,7 +69,7 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'bhavya.oberoi@learnapp.com';
 
 // Resend fallback (for when SendGrid not configured)
-const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gPwuFNvg_JEL3arzPU7QApcCZz7CW5xFu';
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 console.log('📧 Email Configuration:');
 console.log('   Primary: SendGrid HTTP API (can send to ANY email)');
@@ -710,12 +758,44 @@ const pool = new Pool({
 async function runDatabaseMigrations() {
   try {
     console.log('🔄 Running database migrations...');
-    
-    // Add payment_confirmed column if it doesn't exist
+
+    // Add payment_confirmed column if it doesn't exist (SHOOTS only)
     await pool.query(`
       ALTER TABLE shoots ADD COLUMN IF NOT EXISTS payment_confirmed BOOLEAN DEFAULT FALSE;
     `);
-    
+
+    // Add device_type_other column to repair_requests if it doesn't exist (REPAIRS only)
+    await pool.query(`
+      ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS device_type_other TEXT;
+    `);
+
+    // Add invoice columns to repair_requests (REPAIRS only)
+    await pool.query(`
+      ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS invoice_url TEXT;
+    `);
+    await pool.query(`
+      ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS invoice_filename TEXT;
+    `);
+
+    // Add payment workflow columns to repair_requests (REPAIRS only)
+    await pool.query(`
+      ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS payment_confirmed BOOLEAN DEFAULT FALSE;
+    `);
+    await pool.query(`
+      ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS paid BOOLEAN DEFAULT FALSE;
+    `);
+
+    // Migrate old "Approved" status to "Pending Invoice" for REPAIRS ONLY
+    const migrateResult = await pool.query(`
+      UPDATE repair_requests 
+      SET status = 'Pending Invoice' 
+      WHERE status = 'Approved'
+      RETURNING id
+    `);
+    if (migrateResult.rowCount > 0) {
+      console.log(`   ✅ Migrated ${migrateResult.rowCount} repair request(s) from "Approved" to "Pending Invoice"`);
+    }
+
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('⚠️ Database migration error:', error.message);
@@ -810,6 +890,33 @@ async function initDatabase() {
         password TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin', 'super_admin')),
         department TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Which modules a member can reach. Admins are granted everything regardless of this value.
+    await pool.query(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS module_access JSONB DEFAULT '{"shoots": true, "repairs": false}'::jsonb`
+    ).catch(() => {});
+
+    // IT equipment repair / replacement requests
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS repair_requests (
+        id TEXT PRIMARY KEY,
+        requestor_name TEXT NOT NULL,
+        approval_tags JSONB DEFAULT '[]'::jsonb,
+        item TEXT NOT NULL,
+        action TEXT NOT NULL,
+        device_type TEXT NOT NULL,
+        device_id TEXT,
+        assigned_users JSONB DEFAULT '[]'::jsonb,
+        date DATE NOT NULL,
+        cost NUMERIC NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'Pending Approval',
+        created_by TEXT,
+        approved_by TEXT,
+        approved_at TIMESTAMP WITH TIME ZONE,
+        rejection_reason TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
@@ -1388,7 +1495,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
     const result = await pool.query(
-      'SELECT email, name, role, department FROM users WHERE email = $1 AND password = $2',
+      'SELECT email, name, role, department, module_access FROM users WHERE email = $1 AND password = $2',
       [email.toLowerCase().trim(), password]
     );
     if (result.rows.length === 0) {
@@ -1408,7 +1515,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT email, name, role, department, created_at FROM users ORDER BY created_at ASC'
+      'SELECT email, name, role, department, module_access, created_at FROM users ORDER BY created_at ASC'
     );
     res.json(result.rows);
   } catch (error) {
@@ -1419,22 +1526,35 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { email, name, password, role = 'user', department = '' } = req.body;
+    const { email, name, password, role = 'user', department = '', module_access } = req.body;
     if (!email || !name || !password) {
       return res.status(400).json({ error: 'email, name, and password are required' });
     }
+    
+    console.log(`📝 POST /api/users - Creating user: ${email}, role: ${role}`);
+    console.log(`   Received module_access:`, JSON.stringify(module_access));
+    
+    // Use the provided module_access, or default based on role if not provided
+    const moduleAccess = module_access || (role === 'user'
+      ? { shoots: true, repairs: false }
+      : { shoots: true, repairs: true });
+    
+    console.log(`   Final moduleAccess to save:`, JSON.stringify(moduleAccess));
+    
     const result = await pool.query(
-      `INSERT INTO users (email, name, password, role, department)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING email, name, role, department, created_at`,
-      [email.toLowerCase().trim(), name, password, role, department]
+      `INSERT INTO users (email, name, password, role, department, module_access)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING email, name, role, department, module_access, created_at`,
+      [email.toLowerCase().trim(), name, password, role, department, JSON.stringify(moduleAccess)]
     );
+    
+    console.log(`   ✅ User created with module_access:`, JSON.stringify(result.rows[0].module_access));
     res.status(201).json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'A user with this email already exists' });
     }
-    console.error('Create user error:', error);
+    console.error('❌ Create user error:', error);
     res.status(500).json({ error: 'Failed to create user', details: error.message });
   }
 });
@@ -1446,9 +1566,14 @@ app.patch('/api/users/:email/role', async (req, res) => {
     if (!['user', 'admin', 'super_admin'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role. Must be user, admin, or super_admin' });
     }
+    // Admins get every module; demoting back to member resets to Shoots only.
+    const moduleAccess = role === 'user'
+      ? { shoots: true, repairs: false }
+      : { shoots: true, repairs: true };
     const result = await pool.query(
-      'UPDATE users SET role = $1 WHERE email = $2 RETURNING email, name, role, department',
-      [role, email.toLowerCase()]
+      `UPDATE users SET role = $1, module_access = $3 WHERE email = $2
+       RETURNING email, name, role, department, module_access`,
+      [role, email.toLowerCase(), JSON.stringify(moduleAccess)]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -1695,6 +1820,681 @@ app.post('/api/slack/monthly-report', async (req, res) => {
     res.json({ success: true, message: 'Monthly report sent' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// NOTIFICATION CHANNELS (per module)
+// ============================================
+// Declared in one place so the two modules cannot drift: shoots keep Slack + email,
+// repairs are Slack-only and can never send an email.
+const MODULE_NOTIFICATION_CHANNELS = {
+  shoots: { slack: true, email: true },
+  repairs: { slack: true, email: false },
+};
+
+function moduleAllowsChannel(moduleKey, channel) {
+  const policy = MODULE_NOTIFICATION_CHANNELS[moduleKey];
+  return !!(policy && policy[channel]);
+}
+
+async function getSlackWebhookUrl() {
+  // Local development can redirect every module notification to a throwaway webhook by
+  // setting SLACK_WEBHOOK_URL in .env. Railway does not set it, so hosted runs keep
+  // reading the saved Slack Integration settings exactly as before.
+  if (process.env.SLACK_WEBHOOK_URL) {
+    return process.env.SLACK_WEBHOOK_URL;
+  }
+  try {
+    const result = await pool.query('SELECT webhook_url FROM slack_settings WHERE id = 1');
+    return result.rows[0]?.webhook_url || '';
+  } catch {
+    return '';
+  }
+}
+
+async function postToSlack(webhookUrl, { text, blocks }) {
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(blocks ? { text, blocks } : { text }),
+  });
+  if (!response.ok) {
+    throw new Error(`Slack responded with ${response.status}: ${await response.text()}`);
+  }
+}
+
+/**
+ * Single entry point for module notifications. Callers state the channel they want and the
+ * policy above decides whether it is permitted for that module.
+ */
+async function sendModuleNotification(moduleKey, { slack, email } = {}) {
+  const outcome = { slack: 'skipped', email: 'skipped' };
+
+  if (slack) {
+    if (!moduleAllowsChannel(moduleKey, 'slack')) {
+      outcome.slack = 'blocked-by-policy';
+    } else {
+      const webhookUrl = slack.webhookUrl || (await getSlackWebhookUrl());
+      if (!webhookUrl) {
+        outcome.slack = 'no-webhook';
+      } else {
+        try {
+          await postToSlack(webhookUrl, slack);
+          outcome.slack = 'sent';
+        } catch (error) {
+          console.error(`⚠️ Slack notification failed for ${moduleKey}:`, error.message);
+          outcome.slack = 'failed';
+        }
+      }
+    }
+  }
+
+  if (email) {
+    if (!moduleAllowsChannel(moduleKey, 'email')) {
+      console.log(`ℹ️ Email suppressed for ${moduleKey} module (channel policy).`);
+      outcome.email = 'blocked-by-policy';
+    } else {
+      try {
+        await sendEmailViaSMTP(email.to, email.subject, email.html, email.threadOptions || {});
+        outcome.email = 'sent';
+      } catch (error) {
+        console.error(`⚠️ Email notification failed for ${moduleKey}:`, error.message);
+        outcome.email = 'failed';
+      }
+    }
+  }
+
+  return outcome;
+}
+
+// ============================================
+// MODULE ACCESS
+// ============================================
+const MEMBER_DEFAULT_MODULE_ACCESS = { shoots: true, repairs: false };
+const FULL_MODULE_ACCESS = { shoots: true, repairs: true };
+
+function resolveModuleAccess(role, stored) {
+  if (role === 'admin' || role === 'super_admin') return { ...FULL_MODULE_ACCESS };
+
+  let raw = stored;
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch { raw = null; }
+  }
+  if (!raw || typeof raw !== 'object') return { ...MEMBER_DEFAULT_MODULE_ACCESS };
+
+  const access = { shoots: raw.shoots !== false, repairs: raw.repairs === true };
+  if (!access.shoots && !access.repairs) return { ...MEMBER_DEFAULT_MODULE_ACCESS };
+  return access;
+}
+
+async function loadRequestUser(req) {
+  const email = String(req.header('x-user-email') || req.query.userEmail || '').toLowerCase().trim();
+  if (!email) return null;
+  const result = await pool.query(
+    'SELECT email, name, role, module_access FROM users WHERE email = $1',
+    [email]
+  );
+  return result.rows[0] || null;
+}
+
+/** Route guard: a member without the module gets a 403, not just a hidden nav item. */
+function requireModule(moduleKey) {
+  return async (req, res, next) => {
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ error: 'Database not configured' });
+    }
+    try {
+      const user = await loadRequestUser(req);
+      if (!user) {
+        return res.status(401).json({ error: 'Sign in required to access this module.' });
+      }
+      const access = resolveModuleAccess(user.role, user.module_access);
+      if (!access[moduleKey]) {
+        return res.status(403).json({
+          error: 'You do not have access to this module.',
+          module: moduleKey,
+          redirectTo: access.shoots ? 'dashboard' : 'repairs',
+        });
+      }
+      req.appUser = user;
+      req.moduleAccess = access;
+      next();
+    } catch (error) {
+      console.error('Module access check failed:', error.message);
+      res.status(500).json({ error: 'Module access check failed', details: error.message });
+    }
+  };
+}
+
+app.patch('/api/users/:email/module-access', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const incoming = req.body?.moduleAccess || {};
+    console.log(`📝 PATCH /api/users/${email}/module-access - Incoming:`, JSON.stringify(incoming));
+    
+    const moduleAccess = { shoots: incoming.shoots !== false, repairs: incoming.repairs === true };
+    console.log(`   Normalized module_access:`, JSON.stringify(moduleAccess));
+    
+    if (!moduleAccess.shoots && !moduleAccess.repairs) {
+      console.log(`   ❌ Validation failed: at least one module required`);
+      return res.status(400).json({ error: 'A member needs access to at least one module.' });
+    }
+    
+    const result = await pool.query(
+      'UPDATE users SET module_access = $1 WHERE email = $2 RETURNING email, name, role, module_access',
+      [JSON.stringify(moduleAccess), email.toLowerCase()]
+    );
+    
+    if (result.rows.length === 0) {
+      console.log(`   ❌ User not found: ${email}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`   ✅ Updated successfully:`, JSON.stringify(result.rows[0].module_access));
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Update module access error:', error);
+    res.status(500).json({ error: 'Failed to update module access', details: error.message });
+  }
+});
+
+// ============================================
+// IT ASSETS & REPAIRS
+// ============================================
+const { REPAIR_APPROVAL_THRESHOLD } = require('../shared/constants.json');
+
+const REPAIR_ACTIONS = ['Repaired', 'Replaced'];
+const REPAIR_DEVICE_TYPES = ['PC', 'Laptop', 'Other'];
+
+/**
+ * pg hands back a DATE column as a Date at local midnight. Formatting that through
+ * toISOString() would shift it back a day for any timezone ahead of UTC (IST included),
+ * so the calendar parts are read locally instead.
+ */
+function formatDateOnly(value) {
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return value;
+}
+
+function mapRepairRow(row) {
+  return {
+    id: row.id,
+    requestorName: row.requestor_name,
+    approvalTags: row.approval_tags || [],
+    item: row.item,
+    action: row.action,
+    deviceType: row.device_type,
+    deviceTypeOther: row.device_type_other || null,
+    deviceId: row.device_id,
+    assignedUsers: row.assigned_users || [],
+    date: formatDateOnly(row.date),
+    cost: Number(row.cost),
+    status: row.status,
+    createdBy: row.created_by,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    rejectionReason: row.rejection_reason,
+    invoiceUrl: row.invoice_url,
+    invoiceFilename: row.invoice_filename,
+    paymentConfirmed: row.payment_confirmed || false,
+    paid: row.paid || false,
+    createdAt: row.created_at,
+  };
+}
+
+function validateRepairPayload(body) {
+  const errors = {};
+  const cost = Number(body.cost);
+  const approvalTags = Array.isArray(body.approvalTags)
+    ? body.approvalTags.filter(t => t && String(t.name || '').trim())
+        .map(t => ({ name: String(t.name).trim(), slackUserId: String(t.slackUserId || '').trim() }))
+    : [];
+  const assignedUsers = Array.isArray(body.assignedUsers)
+    ? body.assignedUsers.filter(u => u && String(u.name || '').trim())
+        .map(u => ({ name: String(u.name).trim(), email: u.email ? String(u.email).trim() : undefined }))
+    : [];
+
+  const deviceTypeOther = body.deviceTypeOther == null || String(body.deviceTypeOther).trim() === '' 
+    ? null 
+    : String(body.deviceTypeOther).trim();
+
+  const value = {
+    requestorName: String(body.requestorName || '').trim(),
+    item: String(body.item || '').trim(),
+    action: body.action,
+    deviceType: body.deviceType,
+    deviceTypeOther,
+    deviceId: body.deviceId == null || String(body.deviceId).trim() === '' ? null : String(body.deviceId).trim(),
+    date: body.date,
+    cost,
+    approvalTags,
+    assignedUsers,
+  };
+
+  if (!value.requestorName) errors.requestorName = 'Requestor name is required.';
+  if (!value.item) errors.item = 'Item is required.';
+  if (!REPAIR_ACTIONS.includes(value.action)) errors.action = 'Choose Repaired or Replaced.';
+  if (!REPAIR_DEVICE_TYPES.includes(value.deviceType)) errors.deviceType = 'Choose a device type.';
+  if (value.deviceType === 'Other' && !deviceTypeOther) {
+    errors.deviceTypeOther = 'Please specify the device type.';
+  }
+  if (!assignedUsers.length) errors.assignedUsers = 'Assign at least one user.';
+  if (!value.date) errors.date = 'Date is required.';
+  if (!Number.isFinite(cost) || cost <= 0) errors.cost = 'Cost must be greater than 0.';
+  if (Number.isFinite(cost) && cost >= REPAIR_APPROVAL_THRESHOLD && approvalTags.length === 0) {
+    errors.approvalTags = 'Tag at least one person for approval.';
+  }
+
+  return { errors, value };
+}
+
+function formatRupees(amount) {
+  return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function repairAppLink(repairId) {
+  const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
+  return `${appUrl}?view=repairs&repairId=${encodeURIComponent(repairId)}`;
+}
+
+function repairDeviceLabel(repair) {
+  const deviceType = repair.deviceType === 'Other' && repair.deviceTypeOther 
+    ? repair.deviceTypeOther 
+    : repair.deviceType;
+  return `${deviceType} · ${repair.deviceId || 'NA'}`;
+}
+
+function repairSlackMentions(repair) {
+  return (repair.approvalTags || [])
+    .map(tag => (tag.slackUserId ? `<@${tag.slackUserId}>` : `@${tag.name}`))
+    .join(' ');
+}
+
+async function notifyRepairNeedsApproval(repair) {
+  const mentions = repairSlackMentions(repair);
+  const summary = [
+    `*${repair.item}* — ${repair.action}`,
+    `Device: ${repairDeviceLabel(repair)}`,
+    `Assigned to: ${(repair.assignedUsers || []).map(u => u.name).join(', ') || '—'}`,
+    `Date: ${repair.date}`,
+    `Cost: *${formatRupees(repair.cost)}*`,
+    `Raised by: ${repair.requestorName}`,
+  ].join('\n');
+  const text = `${mentions} — repair request needs your approval.\n${summary}`;
+
+  return sendModuleNotification('repairs', {
+    slack: {
+      text,
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn', text } },
+        {
+          type: 'actions',
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: 'Review Request →', emoji: true },
+            url: repairAppLink(repair.id),
+            style: 'primary',
+          }],
+        },
+      ],
+    },
+  });
+}
+
+async function notifyRepairDecision(repair, decidedBy) {
+  const isApproved = repair.status === 'Pending Invoice';
+  const text = isApproved
+    ? `✅ *${repair.item}* (${repairDeviceLabel(repair)}) — ${formatRupees(repair.cost)} approved by ${decidedBy}.`
+    : `❌ *${repair.item}* (${repairDeviceLabel(repair)}) — ${formatRupees(repair.cost)} rejected by ${decidedBy}.\nReason: ${repair.rejectionReason || '—'}`;
+
+  return sendModuleNotification('repairs', {
+    slack: {
+      text,
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn', text } },
+        {
+          type: 'actions',
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: 'Open Request →', emoji: true },
+            url: repairAppLink(repair.id),
+          }],
+        },
+      ],
+    },
+  });
+}
+
+/** Tagged approvers can act on a request; admins can act on anything. */
+function canDecideRepair(user, repair) {
+  if (user.role === 'admin' || user.role === 'super_admin') return true;
+  const name = String(user.name || '').toLowerCase();
+  const email = String(user.email || '').toLowerCase();
+  return (repair.approvalTags || []).some(tag => {
+    const tagName = String(tag.name || '').toLowerCase();
+    return tagName && (tagName === name || tagName === email);
+  });
+}
+
+app.get('/api/repairs', requireModule('repairs'), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM repair_requests ORDER BY created_at DESC');
+    console.log(`✅ GET /api/repairs - Returned ${result.rows.length} requests`);
+    res.json(result.rows.map(mapRepairRow));
+  } catch (error) {
+    console.error('❌ Error fetching repairs:', error.message);
+    res.status(500).json({ error: 'Failed to fetch repair requests', details: error.message });
+  }
+});
+
+app.post('/api/repairs', requireModule('repairs'), async (req, res) => {
+  const { errors, value } = validateRepairPayload(req.body || {});
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields.', fieldErrors: errors });
+  }
+
+  const autoApproved = value.cost < REPAIR_APPROVAL_THRESHOLD;
+  const id = `repair-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO repair_requests
+         (id, requestor_name, approval_tags, item, action, device_type, device_type_other, device_id,
+          assigned_users, date, cost, status, created_by, approved_by, approved_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       RETURNING *`,
+      [
+        id,
+        value.requestorName,
+        // A sub-threshold request never needs approvers, so the tags are dropped on purpose.
+        JSON.stringify(autoApproved ? [] : value.approvalTags),
+        value.item,
+        value.action,
+        value.deviceType,
+        value.deviceTypeOther || null,
+        value.deviceId,
+        JSON.stringify(value.assignedUsers),
+        value.date,
+        value.cost,
+        autoApproved ? 'Pending Invoice' : 'Pending Approval',
+        req.appUser.email,
+        autoApproved ? 'Auto-approved' : null,
+        autoApproved ? new Date() : null,
+      ]
+    );
+
+    const repair = mapRepairRow(result.rows[0]);
+    if (!autoApproved) {
+      await notifyRepairNeedsApproval(repair);
+    } else {
+      console.log(`✅ Repair ${repair.id} auto-approved (${formatRupees(repair.cost)} under threshold) → Pending Invoice — no Slack message sent.`);
+    }
+    res.status(201).json(repair);
+  } catch (error) {
+    console.error('❌ Error creating repair request:', error.message);
+    res.status(500).json({ error: 'Failed to create repair request', details: error.message });
+  }
+});
+
+app.patch('/api/repairs/:id', requireModule('repairs'), async (req, res) => {
+  const { errors, value } = validateRepairPayload(req.body || {});
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields.', fieldErrors: errors });
+  }
+
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Repair request not found' });
+    }
+    if (existing.rows[0].status !== 'Pending Approval') {
+      return res.status(409).json({ error: 'This request has already been decided and can no longer be edited.' });
+    }
+
+    const autoApproved = value.cost < REPAIR_APPROVAL_THRESHOLD;
+    const result = await pool.query(
+      `UPDATE repair_requests SET
+         requestor_name = $2, approval_tags = $3, item = $4, action = $5, device_type = $6,
+         device_type_other = $7, device_id = $8, assigned_users = $9, date = $10, cost = $11,
+         status = $12, approved_by = $13, approved_at = $14
+       WHERE id = $1
+       RETURNING *`,
+      [
+        req.params.id,
+        value.requestorName,
+        JSON.stringify(autoApproved ? [] : value.approvalTags),
+        value.item,
+        value.action,
+        value.deviceType,
+        value.deviceTypeOther || null,
+        value.deviceId,
+        JSON.stringify(value.assignedUsers),
+        value.date,
+        value.cost,
+        autoApproved ? 'Pending Invoice' : 'Pending Approval',
+        autoApproved ? 'Auto-approved' : null,
+        autoApproved ? new Date() : null,
+      ]
+    );
+    res.json(mapRepairRow(result.rows[0]));
+  } catch (error) {
+    console.error('❌ Error updating repair request:', error.message);
+    res.status(500).json({ error: 'Failed to update repair request', details: error.message });
+  }
+});
+
+app.post('/api/repairs/:id/approve', requireModule('repairs'), async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Repair request not found' });
+
+    const current = mapRepairRow(existing.rows[0]);
+    if (current.status !== 'Pending Approval') {
+      return res.status(409).json({ error: `This request is already ${current.status}.` });
+    }
+    if (!canDecideRepair(req.appUser, current)) {
+      return res.status(403).json({ error: 'You were not tagged for approval on this request.' });
+    }
+
+    const decidedBy = req.appUser.name || req.appUser.email;
+    const result = await pool.query(
+      `UPDATE repair_requests SET status = 'Pending Invoice', approved_by = $2, approved_at = NOW(), rejection_reason = NULL
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, decidedBy]
+    );
+    const repair = mapRepairRow(result.rows[0]);
+    await notifyRepairDecision(repair, decidedBy);
+    res.json(repair);
+  } catch (error) {
+    console.error('❌ Error approving repair request:', error.message);
+    res.status(500).json({ error: 'Failed to approve repair request', details: error.message });
+  }
+});
+
+app.post('/api/repairs/:id/reject', requireModule('repairs'), async (req, res) => {
+  const rejectionReason = String(req.body?.rejectionReason || '').trim();
+  if (!rejectionReason) {
+    return res.status(400).json({ error: 'A rejection reason is required.' });
+  }
+
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Repair request not found' });
+
+    const current = mapRepairRow(existing.rows[0]);
+    if (current.status !== 'Pending Approval') {
+      return res.status(409).json({ error: `This request is already ${current.status}.` });
+    }
+    if (!canDecideRepair(req.appUser, current)) {
+      return res.status(403).json({ error: 'You were not tagged for approval on this request.' });
+    }
+
+    const decidedBy = req.appUser.name || req.appUser.email;
+    const result = await pool.query(
+      `UPDATE repair_requests SET status = 'Rejected', approved_by = $2, approved_at = NOW(), rejection_reason = $3
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, decidedBy, rejectionReason]
+    );
+    const repair = mapRepairRow(result.rows[0]);
+    await notifyRepairDecision(repair, decidedBy);
+    res.json(repair);
+  } catch (error) {
+    console.error('❌ Error rejecting repair request:', error.message);
+    res.status(500).json({ error: 'Failed to reject repair request', details: error.message });
+  }
+});
+
+// Upload invoice for repair request (REPAIRS only)
+app.post('/api/repairs/:id/invoice', requireModule('repairs'), upload.single('invoice'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Repair request not found' });
+    }
+
+    const current = mapRepairRow(existing.rows[0]);
+    if (current.status !== 'Pending Invoice') {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(409).json({ error: `Cannot upload invoice - request status is ${current.status}` });
+    }
+
+    // Store relative URL path
+    const invoiceUrl = `/uploads/${req.file.filename}`;
+    const invoiceFilename = req.file.originalname;
+
+    const result = await pool.query(
+      `UPDATE repair_requests 
+       SET status = 'In Finance', invoice_url = $2, invoice_filename = $3
+       WHERE id = $1 
+       RETURNING *`,
+      [req.params.id, invoiceUrl, invoiceFilename]
+    );
+
+    console.log(`✅ Invoice uploaded for repair ${req.params.id} → status changed to In Finance`);
+    res.json(mapRepairRow(result.rows[0]));
+  } catch (error) {
+    // Clean up file on error
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+    }
+    console.error('❌ Error uploading repair invoice:', error.message);
+    res.status(500).json({ error: 'Failed to upload invoice', details: error.message });
+  }
+});
+
+// Confirm payment for repair (Finance team action)
+app.post('/api/repairs/:id/confirm-payment', requireModule('repairs'), async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Repair request not found' });
+
+    const current = mapRepairRow(existing.rows[0]);
+    if (current.status !== 'In Finance') {
+      return res.status(409).json({ error: 'Payment can only be confirmed for repairs in Finance.' });
+    }
+    if (current.paymentConfirmed) {
+      return res.status(409).json({ error: 'Payment already confirmed for this repair.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE repair_requests SET payment_confirmed = TRUE WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    const repair = mapRepairRow(result.rows[0]);
+    console.log(`✅ Payment confirmed for repair ${req.params.id} by ${req.appUser.name || req.appUser.email}`);
+    res.json(repair);
+  } catch (error) {
+    console.error('Error confirming payment:', error);
+    res.status(500).json({ error: 'Failed to confirm payment.' });
+  }
+});
+
+// Mark repair as paid (Admin action)
+app.post('/api/repairs/:id/mark-paid', requireModule('repairs'), async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Repair request not found' });
+
+    const current = mapRepairRow(existing.rows[0]);
+    if (current.status !== 'In Finance') {
+      return res.status(409).json({ error: 'Can only mark repairs as paid when they are in Finance.' });
+    }
+    if (!current.paymentConfirmed) {
+      return res.status(409).json({ error: 'Payment must be confirmed by Finance team first.' });
+    }
+    if (current.paid) {
+      return res.status(409).json({ error: 'This repair is already marked as paid.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE repair_requests SET paid = TRUE WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    const repair = mapRepairRow(result.rows[0]);
+    console.log(`✅ Repair ${req.params.id} marked as paid by ${req.appUser.name || req.appUser.email}`);
+    res.json(repair);
+  } catch (error) {
+    console.error('Error marking repair as paid:', error);
+    res.status(500).json({ error: 'Failed to mark repair as paid.' });
+  }
+});
+
+app.post('/api/repairs/:id/notify', requireModule('repairs'), async (req, res) => {
+  try {
+    const existing = await pool.query('SELECT * FROM repair_requests WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Repair request not found' });
+
+    const repair = mapRepairRow(existing.rows[0]);
+    const name = String(req.body?.name || '').trim();
+    const slackUserId = String(req.body?.slackUserId || '').trim();
+    if (!name && !slackUserId) {
+      return res.status(400).json({ error: 'A person to notify is required.' });
+    }
+
+    const mention = slackUserId ? `<@${slackUserId}>` : `@${name}`;
+    const text = `${mention} — *${repair.item}* (${repairDeviceLabel(repair)}) needs your attention.\nStatus: *${repair.status}*\nDate: ${repair.date}`;
+
+    const outcome = await sendModuleNotification('repairs', {
+      slack: {
+        text,
+        blocks: [
+          { type: 'section', text: { type: 'mrkdwn', text } },
+          {
+            type: 'actions',
+            elements: [{
+              type: 'button',
+              text: { type: 'plain_text', text: 'Open in App →', emoji: true },
+              url: repairAppLink(repair.id),
+              style: 'primary',
+            }],
+          },
+        ],
+      },
+    });
+
+    if (outcome.slack === 'no-webhook') {
+      return res.status(400).json({ error: 'No Slack webhook configured in Slack Integration settings.' });
+    }
+    if (outcome.slack !== 'sent') {
+      return res.status(500).json({ error: 'Slack notification failed.' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error notifying about repair request:', error.message);
+    res.status(500).json({ error: 'Failed to send notification', details: error.message });
   }
 });
 

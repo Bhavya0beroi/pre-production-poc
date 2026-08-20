@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Zap,
   Users,
+  Wrench,
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +26,7 @@ interface ArchiveScreenProps {
   onOpenCatalog: () => void;
   onOpenSlackSettings?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
   onRestoreShoot?: (shootId: string) => void;
   onDeletePermanently?: (shootId: string) => void;
   approvalsPending?: number;
@@ -43,8 +45,9 @@ export function ArchiveScreen({
   approvalsPending = 0,
   onOpenSlackSettings,
   onOpenRolePanel,
+  onOpenRepairs,
 }: ArchiveScreenProps) {
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, moduleAccess } = useAuth();
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -158,14 +161,27 @@ export function ArchiveScreen({
 
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <button
-            onClick={onBack}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Active Shoots</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button
+              onClick={onBack}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              <span>Active Shoots</span>
+            </button>
+          )}
+
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button
+              onClick={onOpenRepairs}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Wrench className="w-5 h-5" />
+              <span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenApprovals}
@@ -193,14 +209,16 @@ export function ArchiveScreen({
             <span>Finance & Invoices</span>
           </button>
 
-          <button
-            onClick={onOpenCatalog}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
-            <Package className="w-5 h-5" />
-            <span>Catalog</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button
+              onClick={onOpenCatalog}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Package className="w-5 h-5" />
+              <span>Catalog</span>
+            </button>
+          )}
 
           <button
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors"

@@ -15,16 +15,20 @@ import {
   Users,
   Bell,
   Send,
-  Loader
+  Loader,
+  Wrench
 } from 'lucide-react';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
+import { formatRupees } from '../lib/modules';
+import type { RepairRequest } from '../services/repairService';
 
 interface ApprovalScreenProps {
   shoots: Shoot[];
   allShoots: Shoot[];
   onOpenSlackSettings?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
   onApprove: (shootId: string) => Promise<void> | void;
   onReject: (shootId: string, reason: string) => Promise<void> | void;
   onBack: () => void;
@@ -32,12 +36,49 @@ interface ApprovalScreenProps {
   onOpenCatalog: () => void;
   onOpenArchive: () => void;
   isAdmin?: boolean;
+  repairs?: RepairRequest[];
+  onApproveRepair?: (repairId: string) => Promise<void>;
+  onRejectRepair?: (repairId: string, reason: string) => Promise<void>;
 }
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
-export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false, onOpenSlackSettings, onOpenRolePanel }: ApprovalScreenProps) {
-  const { user, isSuperAdmin } = useAuth();
+export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, repairs = [], onApproveRepair, onRejectRepair }: ApprovalScreenProps) {
+  const { user, isSuperAdmin, moduleAccess } = useAuth();
+  const [repairRejectFor, setRepairRejectFor] = useState<RepairRequest | null>(null);
+  const [repairRejectReason, setRepairRejectReason] = useState('');
+  const [repairBusyId, setRepairBusyId] = useState<string | null>(null);
+  const [repairError, setRepairError] = useState('');
+
+  // A pending repair shows up for the people it tagged; admins see all of them.
+  const pendingRepairs = repairs.filter(r => {
+    if (r.status !== 'Pending Approval') return false;
+    if (isAdmin) return true;
+    const name = (user?.name || '').toLowerCase();
+    const email = (user?.email || '').toLowerCase();
+    return (r.approvalTags || []).some(t => {
+      const tagName = (t.name || '').toLowerCase();
+      return tagName && (tagName === name || tagName === email);
+    });
+  });
+
+  const decideRepair = async (repair: RepairRequest, decision: 'approve' | 'reject') => {
+    setRepairError('');
+    setRepairBusyId(repair.id);
+    try {
+      if (decision === 'approve') {
+        await onApproveRepair?.(repair.id);
+      } else {
+        await onRejectRepair?.(repair.id, repairRejectReason.trim());
+        setRepairRejectFor(null);
+        setRepairRejectReason('');
+      }
+    } catch (e: any) {
+      setRepairError(e?.message || 'Could not save that decision.');
+    } finally {
+      setRepairBusyId(null);
+    }
+  };
   const [filterTab, setFilterTab] = useState<FilterTab>('pending');
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null);
   const [relatedShoots, setRelatedShoots] = useState<Shoot[]>([]);
@@ -353,14 +394,27 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
 
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <button
-            onClick={onBack}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Active Shoots</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button
+              onClick={onBack}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              <span>Active Shoots</span>
+            </button>
+          )}
+
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button
+              onClick={onOpenRepairs}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Wrench className="w-5 h-5" />
+              <span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
 
           <button
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors relative"
@@ -387,14 +441,16 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
             <span>Finance & Invoices</span>
           </button>
 
-          <button
-            onClick={onOpenCatalog}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
-            style={{ color: '#9CA3AF' }}
-          >
-            <Package className="w-5 h-5" />
-            <span>Catalog</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button
+              onClick={onOpenCatalog}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700"
+              style={{ color: '#9CA3AF' }}
+            >
+              <Package className="w-5 h-5" />
+              <span>Catalog</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenArchive}
@@ -528,6 +584,76 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
             </div>
           </div>
         </div>
+
+        {/* Repair requests waiting on the people they tagged */}
+        {pendingRepairs.length > 0 && (
+          <div className="px-8 pt-8">
+            <div className="mb-4">
+              <h3 className="text-gray-900 font-semibold">Repair &amp; Replacement Requests</h3>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              {repairError && (
+                <div className="px-6 py-3 text-sm" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                  {repairError}
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Item</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Requestor</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Assigned To</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Cost</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {pendingRepairs.map(repair => (
+                      <tr key={repair.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-900">{repair.item}</div>
+                          <div className="text-sm text-gray-500">
+                            {repair.action} · {repair.deviceType} · {repair.deviceId || 'NA'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{repair.date}</td>
+                        <td className="px-6 py-4 text-gray-700">{repair.requestorName}</td>
+                        <td className="px-6 py-4 text-gray-600">
+                          {(repair.assignedUsers || []).map(u => u.name).join(', ') || '—'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-semibold" style={{ color: '#27AE60' }}>{formatRupees(repair.cost)}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => decideRepair(repair, 'approve')}
+                              disabled={repairBusyId === repair.id}
+                              className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+                              style={{ backgroundColor: '#27AE60' }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => { setRepairRejectFor(repair); setRepairRejectReason(''); }}
+                              disabled={repairBusyId === repair.id}
+                              className="px-4 py-2 rounded-lg border text-sm font-medium transition-colors hover:bg-red-50 disabled:opacity-50"
+                              style={{ borderColor: '#DC2626', color: '#DC2626' }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Approval Table (Grouped by Month) */}
         <div className="px-8 py-8">
@@ -1090,6 +1216,46 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
                 style={{ backgroundColor: '#DC2626' }}
               >
                 Reject Quote
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject a repair request — a reason is mandatory */}
+      {repairRejectFor && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Reject Request</h3>
+              <button onClick={() => setRepairRejectFor(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Please provide a reason for rejecting <strong>{repairRejectFor.item}</strong>:
+            </p>
+            <textarea
+              value={repairRejectReason}
+              onChange={(e) => setRepairRejectReason(e.target.value)}
+              placeholder="Enter reason for rejection..."
+              rows={4}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4 resize-none"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRepairRejectFor(null)}
+                className="flex-1 px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => decideRepair(repairRejectFor, 'reject')}
+                disabled={!repairRejectReason.trim() || repairBusyId === repairRejectFor.id}
+                className="flex-1 px-5 py-2.5 rounded-lg text-white disabled:opacity-50 font-medium transition-colors hover:opacity-90"
+                style={{ backgroundColor: '#DC2626' }}
+              >
+                Reject Request
               </button>
             </div>
           </div>

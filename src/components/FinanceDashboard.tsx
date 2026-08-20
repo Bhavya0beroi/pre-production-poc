@@ -16,32 +16,44 @@ import {
   BarChart3,
   List,
   Zap,
-  Users
+  Users,
+  Wrench,
+  Camera
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { Shoot } from '../App';
 import { useAuth } from '../context/AuthContext';
+import type { RepairRequest } from '../services/repairService';
+import { RepairInvoiceManagement } from './RepairInvoiceManagement';
 
 interface FinanceDashboardProps {
   onOpenSlackSettings?: () => void;
   onOpenRolePanel?: () => void;
+  onOpenRepairs?: () => void;
   shoots: Shoot[];
+  repairs: RepairRequest[];
   onBack: () => void;
   onUploadInvoice: (shootId: string) => void;
   onOpenApprovals: () => void;
   onOpenCatalog: () => void;
   onOpenArchive: () => void;
+  onRefreshRepairs: () => Promise<void>;
 }
 
 type FilterTab = 'all' | 'paid' | 'pending';
 type ViewMode = 'list' | 'chart';
 type ChartView = 'monthly' | 'daily';
+type ModuleTab = 'shoots' | 'repairs';
 
-export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRolePanel }: FinanceDashboardProps) {
+export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, onRefreshRepairs }: FinanceDashboardProps) {
   // Debug log
   console.log('📊 FinanceDashboard received', shoots?.length || 0, 'shoots');
   
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, moduleAccess } = useAuth();
+  const [moduleTab, setModuleTab] = useState<ModuleTab>(() => {
+    // Default to shoots if has shoots access, else repairs
+    return moduleAccess.shoots ? 'shoots' : 'repairs';
+  });
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<Shoot | null>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -49,6 +61,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [chartView, setChartView] = useState<ChartView>('monthly');
+  const [selectedRepairForInvoice, setSelectedRepairForInvoice] = useState<RepairRequest | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedStartDate, setSelectedStartDate] = useState<string>('');
   const [selectedEndDate, setSelectedEndDate] = useState<string>('');
@@ -196,18 +209,77 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     }));
   };
 
-  const invoiceData = getInvoiceData();
-  const groupedInvoices = groupByMonth(invoiceData);
-  const monthOrder = Object.keys(groupedInvoices).sort((a, b) => a.localeCompare(b));
+  // Repairs data processing
+  const getRepairInvoiceData = () => {
+    let filtered = repairs.filter(r => r.status === 'In Finance');
 
-  // Calculate totals - explicitly ensure numeric addition
-  const totalPaid = shoots.filter(s => s.paid).reduce((sum: number, s) => {
-    return Number(sum) + parseAmount(s);
-  }, 0);
-  const totalPending = shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum: number, s) => {
-    return Number(sum) + parseAmount(s);
-  }, 0);
-  const totalShoots = invoiceData.length;
+    if (filterTab === 'paid') {
+      filtered = filtered.filter(r => r.paid);
+    } else if (filterTab === 'pending') {
+      filtered = filtered.filter(r => !r.paid);
+    }
+
+    // Apply date range filter
+    if (filterStartDate && filterEndDate) {
+      const [startY, startM, startD] = filterStartDate.split('-').map(Number);
+      const [endY, endM, endD] = filterEndDate.split('-').map(Number);
+      const startDate = new Date(startY, startM - 1, startD, 0, 0, 0, 0);
+      const endDate = new Date(endY, endM - 1, endD, 23, 59, 59, 999);
+
+      filtered = filtered.filter(r => {
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(r.date);
+        if (!match) return false;
+        const [, year, month, day] = match;
+        const repairDate = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
+        return repairDate >= startDate && repairDate <= endDate;
+      });
+    }
+
+    return filtered;
+  };
+
+  const groupRepairsByMonth = (repairList: RepairRequest[]) => {
+    const groups: { [key: string]: RepairRequest[] } = {};
+
+    repairList.forEach(repair => {
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
+      if (match) {
+        const [, year, month] = match;
+        const monthKey = `${year}-${month}`;
+        if (!groups[monthKey]) {
+          groups[monthKey] = [];
+        }
+        groups[monthKey].push(repair);
+      }
+    });
+
+    return groups;
+  };
+
+  const invoiceData = moduleTab === 'shoots' ? getInvoiceData() : [];
+  const repairInvoiceData = moduleTab === 'repairs' ? getRepairInvoiceData() : [];
+  
+  const groupedInvoices = moduleTab === 'shoots' ? groupByMonth(invoiceData) : {};
+  const groupedRepairs = moduleTab === 'repairs' ? groupRepairsByMonth(repairInvoiceData) : {};
+  
+  const monthOrder = moduleTab === 'shoots' 
+    ? Object.keys(groupedInvoices).sort((a, b) => a.localeCompare(b))
+    : Object.keys(groupedRepairs).sort((a, b) => b.localeCompare(a)); // Repairs: newest first
+
+  // Calculate totals - shoots & repairs
+  const totalPaid = moduleTab === 'shoots' 
+    ? shoots.filter(s => s.paid).reduce((sum: number, s) => {
+        return Number(sum) + parseAmount(s);
+      }, 0)
+    : repairs.filter(r => r.status === 'In Finance' && r.paid).reduce((sum, r) => sum + r.cost, 0);
+  
+  const totalPending = moduleTab === 'shoots' 
+    ? shoots.filter(s => !s.paid && (s.status === 'pending_invoice' || s.status === 'completed')).reduce((sum: number, s) => {
+        return Number(sum) + parseAmount(s);
+      }, 0)
+    : repairs.filter(r => r.status === 'In Finance' && !r.paid).reduce((sum, r) => sum + r.cost, 0);
+
+  const totalShoots = moduleTab === 'shoots' ? invoiceData.length : repairInvoiceData.length;
 
   const toggleMonth = (monthKey: string) => {
     const newExpanded = new Set(expandedMonths);
@@ -249,6 +321,96 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
   // Chart data
   const chartData = useMemo(() => {
+    if (moduleTab === 'repairs') {
+      // Repairs Chart Data
+      if (chartView === 'monthly') {
+        // Filter months based on selection
+        let filteredMonths = [...monthOrder];
+        
+        if (selectedMonthStart || selectedMonthEnd) {
+          const startIdx = selectedMonthStart ? monthOrder.indexOf(selectedMonthStart) : 0;
+          const endIdx = selectedMonthEnd ? monthOrder.indexOf(selectedMonthEnd) : monthOrder.length - 1;
+          
+          if (startIdx !== -1 && endIdx !== -1) {
+            filteredMonths = monthOrder.filter((_, idx) => idx >= startIdx && idx <= endIdx);
+          }
+        }
+        
+        const data = filteredMonths.map(monthKey => {
+          const monthRepairs = groupedRepairs[monthKey] || [];
+          const total = monthRepairs.reduce((sum, r) => sum + r.cost, 0);
+          const repairNames = monthRepairs.map(r => r.item);
+          return {
+            name: formatShortMonth(monthKey),
+            fullName: formatMonthKey(monthKey),
+            monthKey,
+            amount: total,
+            shoots: monthRepairs.length, // Keep 'shoots' key for compatibility with tooltip
+            shootNames: repairNames,
+          };
+        });
+        return data;
+      } else {
+        // Daily/Weekly view for repairs
+        if (!selectedStartDate || !selectedEndDate) return [];
+        
+        const [startYear, startMonth, startDay] = selectedStartDate.split('-').map(Number);
+        const [endYear, endMonth, endDay] = selectedEndDate.split('-').map(Number);
+        const startDate = new Date(startYear, startMonth - 1, startDay);
+        const endDate = new Date(endYear, endMonth - 1, endDay);
+        
+        // Filter repairs within date range
+        const filteredRepairs = repairInvoiceData.filter(repair => {
+          const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
+          if (!match) return false;
+          const [, year, month, day] = match;
+          const repairDate = new Date(Number(year), Number(month) - 1, Number(day));
+          return repairDate >= startDate && repairDate <= endDate;
+        });
+        
+        // Group by day
+        const dailyData: { [key: string]: { amount: number; repairs: number; date: Date; repairNames: string[] } } = {};
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        filteredRepairs.forEach(repair => {
+          const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
+          if (!match) return;
+          const [, year, month, day] = match;
+          const repairDate = new Date(Number(year), Number(month) - 1, Number(day));
+          
+          const dateKey = `${year}-${month}-${day}`;
+          if (!dailyData[dateKey]) {
+            dailyData[dateKey] = { amount: 0, repairs: 0, date: repairDate, repairNames: [] };
+          }
+          dailyData[dateKey].amount += repair.cost;
+          dailyData[dateKey].repairs += 1;
+          dailyData[dateKey].repairNames.push(repair.item);
+        });
+        
+        // Generate all days in range
+        const allDays: { name: string; fullName: string; amount: number; shoots: number; shootNames: string[] }[] = [];
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          const dateKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+          const dayName = dayNames[current.getDay()];
+          const dayNum = current.getDate();
+          const monthName = shortMonthNames[current.getMonth() + 1];
+          
+          allDays.push({
+            name: `${dayNum}`,
+            fullName: `${dayName}, ${monthName} ${dayNum}`,
+            amount: dailyData[dateKey]?.amount || 0,
+            shoots: dailyData[dateKey]?.repairs || 0,
+            shootNames: dailyData[dateKey]?.repairNames || [],
+          });
+          current.setDate(current.getDate() + 1);
+        }
+        
+        return allDays;
+      }
+    }
+    
+    // Shoots Chart Data (unchanged)
     if (chartView === 'monthly') {
       // Filter months based on selection
       let filteredMonths = [...monthOrder];
@@ -335,7 +497,15 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       
       return allDays;
     }
-  }, [chartView, selectedStartDate, selectedEndDate, selectedMonthStart, selectedMonthEnd, invoiceData, groupedInvoices, monthOrder]);
+  }, [moduleTab, chartView, selectedStartDate, selectedEndDate, selectedMonthStart, selectedMonthEnd, invoiceData, groupedInvoices, repairInvoiceData, groupedRepairs, monthOrder]);
+
+  // Debug: Log chart data for repairs
+  console.log('Finance Dashboard - moduleTab:', moduleTab, 'viewMode:', viewMode, 'filterTab:', filterTab, 'chartData length:', chartData.length, 'repairInvoiceData length:', repairInvoiceData.length, 'repairs length:', repairs.length);
+  if (moduleTab === 'repairs' && viewMode === 'chart') {
+    console.log('CHART VIEW FOR REPAIRS - chartData:', chartData);
+    console.log('CHART VIEW FOR REPAIRS - groupedRepairs:', groupedRepairs);
+    console.log('CHART VIEW FOR REPAIRS - monthOrder:', monthOrder);
+  }
 
   // Helper to infer category from equipment name
   const inferCategory = (name: string, existingCategory?: string): string => {
@@ -395,8 +565,13 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
 
   // Category spending data for pie chart - uses the same total as the monthly chart
   const categorySpendingData = useMemo(() => {
+    // Repairs don't have equipment categories, so return empty array
+    if (moduleTab === 'repairs') {
+      return [];
+    }
+
     const categoryTotals: { [key: string]: { value: number; count: number } } = {};
-    
+
     // Use the SAME shoots that chartData uses for consistency
     // chartData uses all invoiceData grouped by month, so we use invoiceData directly
     let shootsToAnalyze = [...invoiceData];
@@ -485,12 +660,17 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
       ...item,
       percentage: total > 0 ? Math.round((item.value / total) * 100) : 0
     }));
-  }, [invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
+  }, [moduleTab, invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
 
   // Detailed category items for drill-down view
   const categoryDetailedItems = useMemo(() => {
+    // Repairs don't have equipment categories
+    if (moduleTab === 'repairs') {
+      return {};
+    }
+
     const categoryItems: { [key: string]: { name: string; shootName: string; qty: number; rate: number; days: number; total: number }[] } = {};
-    
+
     // Use the same filtering logic as categorySpendingData
     let shootsToAnalyze = [...invoiceData];
     
@@ -562,7 +742,7 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
     });
     
     return categoryItems;
-  }, [invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
+  }, [moduleTab, invoiceData, monthOrder, selectedMonthStart, selectedMonthEnd, chartView, selectedStartDate, selectedEndDate]);
 
   // Colors for pie chart
   const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1'];
@@ -611,10 +791,18 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
-          <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
-            <LayoutDashboard className="w-5 h-5" />
-            <span>Active Shoots</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button onClick={onBack} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <LayoutDashboard className="w-5 h-5" />
+              <span>Active Shoots</span>
+            </button>
+          )}
+          {moduleAccess.repairs && onOpenRepairs && (
+            <button onClick={onOpenRepairs} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Wrench className="w-5 h-5" />
+              <span>IT Assets &amp; Repairs</span>
+            </button>
+          )}
           <button onClick={onOpenApprovals} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors relative hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <CheckCircle className="w-5 h-5" />
             <span>Approvals</span>
@@ -626,10 +814,12 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             <DollarSign className="w-5 h-5" />
             <span>Finance & Invoices</span>
           </button>
-          <button onClick={onOpenCatalog} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
-            <Package className="w-5 h-5" />
-            <span>Catalog</span>
-          </button>
+          {moduleAccess.shoots && (
+            <button onClick={onOpenCatalog} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
+              <Package className="w-5 h-5" />
+              <span>Catalog</span>
+            </button>
+          )}
           <button onClick={onOpenArchive} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors hover:bg-gray-700" style={{ color: '#9CA3AF' }}>
             <Archive className="w-5 h-5" />
             <span>Archive</span>
@@ -671,42 +861,182 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
               <h1 className="text-xl font-semibold text-gray-900">Finance & Invoices</h1>
               <p className="text-gray-400 text-sm">Track payments and spending trends</p>
             </div>
-            {/* View Toggle */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode('list')}
-                className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  lineHeight: '1',
-                  backgroundColor: viewMode === 'list' ? '#2563EB' : '#F3F4F6',
-                  color: viewMode === 'list' ? '#FFFFFF' : '#4B5563',
-                  boxShadow: viewMode === 'list' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
-                }}
-              >
-                <List className="w-4 h-4" />
-                List
-              </button>
-              <button
-                onClick={() => setViewMode('chart')}
-                className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  lineHeight: '1',
-                  backgroundColor: viewMode === 'chart' ? '#2563EB' : '#F3F4F6',
-                  color: viewMode === 'chart' ? '#FFFFFF' : '#4B5563',
-                  boxShadow: viewMode === 'chart' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
-                }}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Chart
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Module Toggle - Shoots / Repairs */}
+              {moduleAccess.shoots && moduleAccess.repairs && (
+                <div className="flex items-center rounded-full" style={{ backgroundColor: '#EEF2FF', padding: '4px' }}>
+                  <button
+                    onClick={() => setModuleTab('shoots')}
+                    className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      lineHeight: '1',
+                      backgroundColor: moduleTab === 'shoots' ? '#FFFFFF' : 'transparent',
+                      color: moduleTab === 'shoots' ? '#2563EB' : '#334155',
+                      boxShadow: moduleTab === 'shoots' ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none'
+                    }}
+                  >
+                    <Camera className="w-4 h-4" />
+                    Shoots
+                  </button>
+                  <button
+                    onClick={() => setModuleTab('repairs')}
+                    className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      lineHeight: '1',
+                      backgroundColor: moduleTab === 'repairs' ? '#FFFFFF' : 'transparent',
+                      color: moduleTab === 'repairs' ? '#2563EB' : '#334155',
+                      boxShadow: moduleTab === 'repairs' ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none'
+                    }}
+                  >
+                    <Wrench className="w-4 h-4" />
+                    Repairs
+                  </button>
+                </div>
+              )}
+              {/* View Toggle */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    lineHeight: '1',
+                    backgroundColor: viewMode === 'list' ? '#2563EB' : '#F3F4F6',
+                    color: viewMode === 'list' ? '#FFFFFF' : '#4B5563',
+                    boxShadow: viewMode === 'list' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                  }}
+                >
+                  <List className="w-4 h-4" />
+                  List
+                </button>
+                <button
+                  onClick={() => setViewMode('chart')}
+                  className="flex items-center gap-2 rounded-full font-medium transition-all whitespace-nowrap"
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    lineHeight: '1',
+                    backgroundColor: viewMode === 'chart' ? '#2563EB' : '#F3F4F6',
+                    color: viewMode === 'chart' ? '#FFFFFF' : '#4B5563',
+                    boxShadow: viewMode === 'chart' ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none'
+                  }}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Chart
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
+        {/* Repairs Tab Content */}
+        {moduleTab === 'repairs' && viewMode === 'list' && (
+          <div className="px-8 py-6">
+            {repairInvoiceData.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                <p className="text-gray-500">No repair invoices yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {monthOrder.map((monthKey) => {
+                  const monthRepairs = groupedRepairs[monthKey] || [];
+                  const monthTotal = monthRepairs.reduce((sum, r) => sum + r.cost, 0);
+                  const isExpanded = expandedMonths.has(monthKey);
+                  const repairCount = monthRepairs.length;
+
+                  return (
+                    <div key={monthKey} className="bg-white rounded-xl border border-gray-200 mb-2" style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
+                      <button onClick={() => toggleMonth(monthKey)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                          <div className="text-left">
+                            <div className="font-semibold" style={{ fontSize: '18px', color: '#1F2937' }}>
+                              {formatMonthKey(monthKey)}
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#9CA3AF' }}>
+                              {repairCount} {repairCount === 1 ? 'repair' : 'repairs'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="font-semibold" style={{ fontSize: '18px', color: '#27AE60' }}>
+                          ₹{monthTotal.toLocaleString()}
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-gray-100">
+                          {monthRepairs.map(repair => {
+                            const deviceType = repair.deviceType === 'Other' && repair.deviceTypeOther 
+                              ? repair.deviceTypeOther 
+                              : repair.deviceType;
+                            const deviceId = repair.deviceId || 'NA';
+                            const assignedNames = (repair.assignedUsers || []).map(u => u.name).join(', ') || '—';
+                            const formattedDate = (() => {
+                              const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
+                              if (match) {
+                                const [, year, month, day] = match;
+                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                return `${Number(day)} ${monthNames[Number(month) - 1]} ${year}`;
+                              }
+                              return repair.date;
+                            })();
+
+                            return (
+                              <div
+                                key={repair.id}
+                                className="px-5 py-3 flex items-center justify-between transition-colors"
+                                style={{ backgroundColor: '#F9FAFB' }}
+                              >
+                                <div className="flex-1">
+                                  <div className="font-medium" style={{ fontSize: '16px', color: '#1F2937' }}>
+                                    {repair.item}
+                                  </div>
+                                  <div style={{ fontSize: '13px', color: '#9CA3AF' }}>
+                                    {deviceType} · {deviceId}
+                                  </div>
+                                </div>
+                                <div className="flex-1 text-center" style={{ fontSize: '13px', color: '#9CA3AF' }}>
+                                  <div>{assignedNames}</div>
+                                  <div>{formattedDate}</div>
+                                </div>
+                                <div className="flex-1 text-right">
+                                  <div className="font-semibold" style={{ fontSize: '16px', color: '#27AE60' }}>
+                                    ₹{repair.cost.toLocaleString()}
+                                  </div>
+                                  <div style={{ fontSize: '13px', color: repair.paid ? '#27AE60' : '#9CA3AF' }}>
+                                    {repair.paid ? 'Paid' : 'Pending'}
+                                  </div>
+                                </div>
+                                <div className="flex-1 text-right">
+                                  <button
+                                    onClick={() => setSelectedRepairForInvoice(repair)}
+                                    className="text-sm font-medium hover:underline"
+                                    style={{ color: '#2563EB' }}
+                                  >
+                                    {repair.invoiceFilename || 'View Invoice'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Shoots Tab - Existing Content */}
+        {moduleTab === 'shoots' && (
+          <>
         {/* Tabs + Stats Row */}
         <div className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
@@ -837,11 +1167,13 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             </div>
           </div>
         </div>
+          </>
+        )}
 
-        {/* Content Area */}
-        <div className="px-6 py-4">
-          {viewMode === 'chart' ? (
-            /* Chart View */
+        {/* Content Area - Chart View (Shared by both tabs) */}
+        {viewMode === 'chart' && (
+          <div className="px-6 py-4">
+            {/* Chart View */}
             <div className="space-y-6">
               {/* Time Period Selector */}
               <div className="flex items-center gap-3 flex-wrap">
@@ -989,7 +1321,8 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 )}
               </div>
 
-              {/* Category Spending Pie Chart */}
+              {/* Category Spending Pie Chart - Shoots Only */}
+              {moduleTab === 'shoots' && (
               <div className="bg-white rounded-xl border border-gray-200 p-6 mt-6" style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -1078,8 +1411,10 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   </div>
                 )}
               </div>
+              )}
 
-              {/* Monthly Summary Cards */}
+              {/* Monthly Summary Cards - Shoots Only */}
+              {moduleTab === 'shoots' && (
               <div className="grid grid-cols-3 gap-4">
                 {monthOrder.slice(-6).map(monthKey => {
                   const monthShoots = groupedInvoices[monthKey] || [];
@@ -1116,9 +1451,14 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                   );
                 })}
               </div>
+              )}
             </div>
-          ) : (
-            /* List View */
+          </div>
+        )}
+
+        {/* List View - Shoots Only */}
+        {viewMode === 'list' && moduleTab === 'shoots' && (
+          <div className="px-6 py-4">
             <div className="space-y-6">
               {monthOrder.slice().reverse().map(monthKey => {
                 const monthInvoices = groupedInvoices[monthKey];
@@ -1286,9 +1626,9 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
                 <p className="text-gray-500">No invoices found for the selected filter.</p>
               </div>
             )}
+            </div>
           </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* PDF Preview Modal */}
@@ -1475,6 +1815,18 @@ export function FinanceDashboard({ shoots, onBack, onUploadInvoice, onOpenApprov
             </div>
           </div>
         </div>
+      )}
+
+      {/* Repair Invoice Management Modal */}
+      {selectedRepairForInvoice && (
+        <RepairInvoiceManagement
+          repair={selectedRepairForInvoice}
+          onClose={() => setSelectedRepairForInvoice(null)}
+          onUploadSuccess={async () => {
+            await onRefreshRepairs();
+            setSelectedRepairForInvoice(null);
+          }}
+        />
       )}
     </div>
   );

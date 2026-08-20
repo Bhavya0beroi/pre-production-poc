@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { resolveModuleAccess, type ModuleAccess } from '../lib/modules';
 
 export type UserRole = 'user' | 'admin' | 'super_admin';
 
@@ -6,6 +7,7 @@ interface User {
   email: string;
   role: UserRole;
   name: string;
+  moduleAccess?: ModuleAccess;
 }
 
 interface AuthContextType {
@@ -15,6 +17,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isAuthenticated: boolean;
+  moduleAccess: ModuleAccess;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,7 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser({
           email: data.user.email,
           role: data.user.role as UserRole,
-          name: data.user.name
+          name: data.user.name,
+          moduleAccess: resolveModuleAccess(data.user.role, data.user.module_access)
         });
         return true;
       }
@@ -102,7 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser({
         email: normalizedEmail,
         role: userConfig.role,
-        name: userConfig.name
+        name: userConfig.name,
+        moduleAccess: resolveModuleAccess(userConfig.role, null)
       });
       return true;
     }
@@ -120,7 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
     isSuperAdmin: user?.role === 'super_admin',
-    isAuthenticated: user !== null
+    isAuthenticated: user !== null,
+    moduleAccess: resolveModuleAccess(user?.role, user?.moduleAccess ?? null)
   };
 
   return (
