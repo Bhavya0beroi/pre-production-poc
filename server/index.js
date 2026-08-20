@@ -2002,7 +2002,7 @@ app.patch('/api/users/:email/module-access', async (req, res) => {
 // ============================================
 // IT ASSETS & REPAIRS
 // ============================================
-const { REPAIR_APPROVAL_THRESHOLD } = require('../shared/constants.json');
+const { REPAIR_APPROVAL_THRESHOLD } = require('./constants.json');
 
 const REPAIR_ACTIONS = ['Repaired', 'Replaced'];
 const REPAIR_DEVICE_TYPES = ['PC', 'Laptop', 'Other'];

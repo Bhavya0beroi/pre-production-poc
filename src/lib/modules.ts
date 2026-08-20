@@ -1,4 +1,4 @@
-import sharedConstants from '../../shared/constants.json';
+import sharedConstants from '../../../server/constants.json';
 
 /** Repairs at or above this rupee value need a human approval. Below it, they auto-approve. */
 export const REPAIR_APPROVAL_THRESHOLD: number = sharedConstants.REPAIR_APPROVAL_THRESHOLD;
