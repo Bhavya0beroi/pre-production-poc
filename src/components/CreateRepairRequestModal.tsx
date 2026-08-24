@@ -274,26 +274,32 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
     setErrors(prev => ({ ...prev, assignedUsers: undefined }));
   };
 
-  const validate = (): FieldErrors => {
-    const next: FieldErrors = {};
-    if (!requestorName.trim()) next.requestorName = 'Requestor name is required.';
-    if (!item.trim()) next.item = 'Item is required.';
-    if (!action) next.action = 'Choose Repaired or Replaced.';
-    if (!deviceType) next.deviceType = 'Choose a device type.';
-    if (deviceType === 'Other' && !deviceTypeOther.trim()) {
-      next.deviceTypeOther = 'Please specify the device type.';
-    }
-    if (assignedUsers.length === 0) next.assignedUsers = 'Assign at least one user.';
-    if (!date) next.date = 'Date is required.';
-    if (!hasCost || costValue <= 0) next.cost = 'Cost must be greater than 0.';
-    if (hasCost && costValue >= REPAIR_APPROVAL_THRESHOLD && approvalTags.length === 0) {
-      next.approvalTags = 'Tag at least one person for approval.';
-    }
-    return next;
-  };
-
   const handleSubmit = async () => {
-    const found = validate();
+    // Auto-commit any name still typed in the assigned users input
+    let finalAssignedUsers = assignedUsers;
+    if (assignedInput.trim()) {
+      const pending = assignedInput.trim();
+      if (!finalAssignedUsers.some(n => n.toLowerCase() === pending.toLowerCase())) {
+        finalAssignedUsers = [...finalAssignedUsers, pending];
+        setAssignedUsers(finalAssignedUsers);
+        setAssignedInput('');
+      }
+    }
+
+    const found: FieldErrors = {};
+    if (!requestorName.trim()) found.requestorName = 'Requestor name is required.';
+    if (!item.trim()) found.item = 'Item is required.';
+    if (!action) found.action = 'Choose Repaired or Replaced.';
+    if (!deviceType) found.deviceType = 'Choose a device type.';
+    if (deviceType === 'Other' && !deviceTypeOther.trim()) {
+      found.deviceTypeOther = 'Please specify the device type.';
+    }
+    if (finalAssignedUsers.length === 0) found.assignedUsers = 'Assign at least one user.';
+    if (!date) found.date = 'Date is required.';
+    if (!hasCost || costValue <= 0) found.cost = 'Cost must be greater than 0.';
+    if (hasCost && costValue >= REPAIR_APPROVAL_THRESHOLD && approvalTags.length === 0) {
+      found.approvalTags = 'Tag at least one person for approval.';
+    }
     setErrors(found);
     setSubmitError('');
     if (Object.keys(found).length > 0) return;
@@ -308,7 +314,7 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
         deviceType: deviceType as RepairDeviceType,
         deviceTypeOther: deviceType === 'Other' && deviceTypeOther.trim() ? deviceTypeOther.trim() : null,
         deviceId: deviceNA || !deviceId.trim() ? null : deviceId.trim(),
-        assignedUsers,
+        assignedUsers: finalAssignedUsers,
         date,
         cost: costValue,
       });
