@@ -417,8 +417,8 @@ export function RepairsDashboard({
                   {tableData.map(repair => {
                     const statusStyle = STATUS_STYLES[repair.status] || STATUS_STYLES['Pending Approval'];
                     const chip = ACTION_CHIP_STYLES[repair.action] || ACTION_CHIP_STYLES.Repaired;
-                    // A decided request is locked — only pending ones can still be corrected.
-                    const editable = repair.status === 'Pending Approval';
+                    // Editable until invoice is uploaded (Pending Approval or Pending Invoice).
+                    const editable = repair.status === 'Pending Approval' || repair.status === 'Pending Invoice';
 
                     return (
                       <tr key={repair.id} className="hover:bg-gray-50 transition-colors">
@@ -487,7 +487,7 @@ export function RepairsDashboard({
                           <button
                             onClick={() => editable && onEditRepair(repair.id)}
                             disabled={!editable}
-                            title={editable ? 'Edit request' : 'Locked — this request has already been decided'}
+                            title={editable ? 'Edit request' : 'Locked — invoice already uploaded'}
                             className="p-2 rounded-lg transition-colors hover:bg-blue-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             style={{ color: '#9CA3AF' }}
                           >

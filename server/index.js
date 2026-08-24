@@ -2278,8 +2278,9 @@ app.patch('/api/repairs/:id', requireModule('repairs'), async (req, res) => {
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Repair request not found' });
     }
-    if (existing.rows[0].status !== 'Pending Approval') {
-      return res.status(409).json({ error: 'This request has already been decided and can no longer be edited.' });
+    const currentStatus = existing.rows[0].status;
+    if (currentStatus !== 'Pending Approval' && currentStatus !== 'Pending Invoice') {
+      return res.status(409).json({ error: 'This request has an invoice uploaded and can no longer be edited.' });
     }
 
     const autoApproved = value.cost < REPAIR_APPROVAL_THRESHOLD;
