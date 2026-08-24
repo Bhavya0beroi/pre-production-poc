@@ -178,9 +178,11 @@ function AppContent() {
   // If a ?shootId= / ?view= is in the URL (from Slack/email links), save before login redirect
   const shootIdFromUrl = urlParams.get('shootId');
   const viewFromUrl = urlParams.get('view');
+  const repairIdFromUrl = urlParams.get('repairId');
   if (!isAuthenticated) {
     if (shootIdFromUrl) sessionStorage.setItem('pending_shoot_id', shootIdFromUrl);
     if (viewFromUrl) sessionStorage.setItem('pending_view', viewFromUrl);
+    if (repairIdFromUrl) sessionStorage.setItem('pending_repair_id', repairIdFromUrl);
   }
   
   // If not authenticated and not a vendor link, show login
@@ -191,7 +193,16 @@ function AppContent() {
   // Load viewMode — deep-link ?view= overrides localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (vendorShootId) return 'vendor';
-    const deepView = viewFromUrl || sessionStorage.getItem('pending_view');
+    const pendingRepairId = sessionStorage.getItem('pending_repair_id');
+    let deepView = viewFromUrl || sessionStorage.getItem('pending_view');
+    // Old Slack approval links used view=repairs — route them to Approvals instead.
+    if ((repairIdFromUrl || pendingRepairId) && deepView === 'repairs') {
+      deepView = 'approvals';
+    }
+    // repairId without an explicit view should land on Approvals.
+    if (!deepView && (repairIdFromUrl || pendingRepairId)) {
+      deepView = 'approvals';
+    }
     if (deepView) {
       sessionStorage.removeItem('pending_view');
       // Map URL param values to internal ViewMode values
@@ -245,6 +256,17 @@ function AppContent() {
   const [repairsError, setRepairsError] = useState<string | null>(null);
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [editingRepairId, setEditingRepairId] = useState<string | null>(null);
+  const [highlightRepairId, setHighlightRepairId] = useState<string | null>(() => {
+    const urlRepairId = urlParams.get('repairId');
+    const pendingRepairId = sessionStorage.getItem('pending_repair_id');
+    const deepLinkId = urlRepairId || pendingRepairId;
+    if (deepLinkId) {
+      sessionStorage.removeItem('pending_repair_id');
+      window.history.replaceState({}, '', window.location.pathname);
+      return deepLinkId;
+    }
+    return null;
+  });
 
   const loadRepairs = useCallback(async () => {
     if (!user?.email || !moduleAccess.repairs) return;
@@ -1962,7 +1984,7 @@ function AppContent() {
           allShoots={shoots}
           onApprove={handleApprove}
           onReject={handleReject}
-          onBack={() => setViewMode('dashboard')}
+          onBack={() => { setViewMode('dashboard'); setHighlightRepairId(null); }}
           onOpenFinance={() => setViewMode('finance')}
           onOpenCatalog={() => setViewMode('catalog')}
           onOpenArchive={() => setViewMode('archive')}
@@ -1970,6 +1992,8 @@ function AppContent() {
           onOpenRolePanel={() => setViewMode('role_panel')}
           onOpenRepairs={() => setViewMode('repairs')}
           repairs={repairs}
+          highlightRepairId={highlightRepairId}
+          onHighlightRepairHandled={() => setHighlightRepairId(null)}
           onApproveRepair={handleApproveRepair}
           onRejectRepair={handleRejectRepair}
           isAdmin={isAdmin}

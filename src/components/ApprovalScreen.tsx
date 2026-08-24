@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   CheckCircle, 
@@ -37,18 +37,21 @@ interface ApprovalScreenProps {
   onOpenArchive: () => void;
   isAdmin?: boolean;
   repairs?: RepairRequest[];
+  highlightRepairId?: string | null;
+  onHighlightRepairHandled?: () => void;
   onApproveRepair?: (repairId: string) => Promise<void>;
   onRejectRepair?: (repairId: string, reason: string) => Promise<void>;
 }
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
-export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, repairs = [], onApproveRepair, onRejectRepair }: ApprovalScreenProps) {
+export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack, onOpenFinance, onOpenCatalog, onOpenArchive, isAdmin = false, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, repairs = [], highlightRepairId, onHighlightRepairHandled, onApproveRepair, onRejectRepair }: ApprovalScreenProps) {
   const { user, isSuperAdmin, moduleAccess } = useAuth();
   const [repairRejectFor, setRepairRejectFor] = useState<RepairRequest | null>(null);
   const [repairRejectReason, setRepairRejectReason] = useState('');
   const [repairBusyId, setRepairBusyId] = useState<string | null>(null);
   const [repairError, setRepairError] = useState('');
+  const highlightedRepairRef = useRef<HTMLTableRowElement | null>(null);
 
   // A pending repair shows up for the people it tagged; admins see all of them.
   const pendingRepairs = repairs.filter(r => {
@@ -61,6 +64,17 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
       return tagName && (tagName === name || tagName === email);
     });
   });
+
+  // Deep-link from Slack: scroll to and highlight the specific repair row.
+  useEffect(() => {
+    if (!highlightRepairId) return;
+    setFilterTab('pending');
+    const timer = window.setTimeout(() => {
+      highlightedRepairRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      onHighlightRepairHandled?.();
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [highlightRepairId, pendingRepairs.length, onHighlightRepairHandled]);
 
   const decideRepair = async (repair: RepairRequest, decision: 'approve' | 'reject') => {
     setRepairError('');
@@ -611,7 +625,13 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {pendingRepairs.map(repair => (
-                      <tr key={repair.id} className="hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={repair.id}
+                        id={`repair-row-${repair.id}`}
+                        ref={highlightRepairId === repair.id ? highlightedRepairRef : undefined}
+                        className="hover:bg-gray-50 transition-colors"
+                        style={highlightRepairId === repair.id ? { backgroundColor: '#EFF6FF' } : undefined}
+                      >
                         <td className="px-6 py-4">
                           <div className="font-medium text-gray-900">{repair.item}</div>
                           <div className="text-sm text-gray-500">

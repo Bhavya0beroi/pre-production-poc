@@ -2123,9 +2123,9 @@ function formatRupees(amount) {
   return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 }
 
-function repairAppLink(repairId) {
+function repairAppLink(repairId, view = 'repairs') {
   const appUrl = process.env.APP_URL || 'https://pre-production-poc-production.up.railway.app';
-  return `${appUrl}?view=repairs&repairId=${encodeURIComponent(repairId)}`;
+  return `${appUrl}?view=${view}&repairId=${encodeURIComponent(repairId)}`;
 }
 
 function repairDeviceLabel(repair) {
@@ -2163,7 +2163,7 @@ async function notifyRepairNeedsApproval(repair) {
           elements: [{
             type: 'button',
             text: { type: 'plain_text', text: 'Review Request →', emoji: true },
-            url: repairAppLink(repair.id),
+            url: repairAppLink(repair.id, 'approvals'),
             style: 'primary',
           }],
         },
