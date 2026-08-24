@@ -975,7 +975,7 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
                               ? repair.deviceTypeOther 
                               : repair.deviceType;
                             const deviceId = repair.deviceId || 'NA';
-                            const assignedNames = (repair.assignedUsers || []).map(u => u.name).join(', ') || '—';
+                            const assignedNames = (repair.assignedUsers || []).join(', ') || '—';
                             const formattedDate = (() => {
                               const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
                               if (match) {

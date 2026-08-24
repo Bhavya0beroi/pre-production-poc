@@ -165,7 +165,7 @@ export function RepairsDashboard({
           r.item,
           r.deviceId || '',
           r.requestorName,
-          ...(r.assignedUsers || []).map(u => u.name),
+          ...(r.assignedUsers || []),
         ].join(' ').toLowerCase();
         return haystack.includes(term);
       });
@@ -437,7 +437,7 @@ export function RepairsDashboard({
                           </div>
                         </td>
                         <td className="px-6 py-4 text-gray-600">
-                          {(repair.assignedUsers || []).map(u => u.name).join(', ') || '—'}
+                          {(repair.assignedUsers || []).join(', ') || '—'}
                         </td>
                         <td className="px-6 py-4 text-gray-600">{formatRepairDate(repair.date)}</td>
                         <td className="px-6 py-4">

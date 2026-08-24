@@ -796,6 +796,29 @@ async function runDatabaseMigrations() {
       console.log(`   ✅ Migrated ${migrateResult.rowCount} repair request(s) from "Approved" to "Pending Invoice"`);
     }
 
+    // Migrate assigned_users from object arrays to string arrays (REPAIRS only)
+    // Convert [{"name":"John","email":"john@example.com"}] to ["John"]
+    const assignedUsersMigration = await pool.query(`
+      SELECT id, assigned_users 
+      FROM repair_requests 
+      WHERE jsonb_typeof(assigned_users) = 'array' 
+        AND jsonb_array_length(assigned_users) > 0
+        AND jsonb_typeof(assigned_users->0) = 'object'
+    `);
+    
+    for (const row of assignedUsersMigration.rows) {
+      const oldUsers = row.assigned_users;
+      const newUsers = oldUsers.map(u => u.name || u);
+      await pool.query(
+        `UPDATE repair_requests SET assigned_users = $1 WHERE id = $2`,
+        [JSON.stringify(newUsers), row.id]
+      );
+    }
+    
+    if (assignedUsersMigration.rowCount > 0) {
+      console.log(`   ✅ Migrated assigned_users for ${assignedUsersMigration.rowCount} repair request(s) from objects to strings`);
+    }
+
     console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('⚠️ Database migration error:', error.message);
@@ -2056,8 +2079,10 @@ function validateRepairPayload(body) {
         .map(t => ({ name: String(t.name).trim(), slackUserId: String(t.slackUserId || '').trim() }))
     : [];
   const assignedUsers = Array.isArray(body.assignedUsers)
-    ? body.assignedUsers.filter(u => u && String(u.name || '').trim())
-        .map(u => ({ name: String(u.name).trim(), email: u.email ? String(u.email).trim() : undefined }))
+    ? body.assignedUsers
+        .filter(u => u != null)
+        .map(u => typeof u === 'string' ? u.trim() : String(u.name || u).trim())
+        .filter(name => name.length > 0)
     : [];
 
   const deviceTypeOther = body.deviceTypeOther == null || String(body.deviceTypeOther).trim() === '' 
@@ -2121,7 +2146,7 @@ async function notifyRepairNeedsApproval(repair) {
   const summary = [
     `*${repair.item}* — ${repair.action}`,
     `Device: ${repairDeviceLabel(repair)}`,
-    `Assigned to: ${(repair.assignedUsers || []).map(u => u.name).join(', ') || '—'}`,
+    `Assigned to: ${(repair.assignedUsers || []).join(', ') || '—'}`,
     `Date: ${repair.date}`,
     `Cost: *${formatRupees(repair.cost)}*`,
     `Raised by: ${repair.requestorName}`,

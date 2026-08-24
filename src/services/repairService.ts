@@ -25,7 +25,7 @@ export interface RepairRequest {
   deviceType: RepairDeviceType;
   deviceTypeOther?: string | null;
   deviceId: string | null;
-  assignedUsers: RepairAssignedUser[];
+  assignedUsers: string[];
   date: string;
   cost: number;
   status: RepairStatus;

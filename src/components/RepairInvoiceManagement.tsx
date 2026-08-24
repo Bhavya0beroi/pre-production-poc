@@ -135,7 +135,7 @@ export function RepairInvoiceManagement({ repair, onClose, onUploadSuccess }: Re
     return `${type} · ${id}`;
   };
 
-  const assignedNames = (repair.assignedUsers || []).map(u => u.name).join(', ') || '—';
+  const assignedNames = (repair.assignedUsers || []).join(', ') || '—';
 
   return (
     <div 

@@ -178,7 +178,7 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
   const [deviceTypeOther, setDeviceTypeOther] = useState(initialRepair?.deviceTypeOther ?? '');
   const [deviceId, setDeviceId] = useState(initialRepair?.deviceId ?? '');
   const [deviceNA, setDeviceNA] = useState(isEditing ? initialRepair?.deviceId == null : false);
-  const [assignedUsers, setAssignedUsers] = useState<RepairAssignedUser[]>(initialRepair?.assignedUsers ?? []);
+  const [assignedUsers, setAssignedUsers] = useState<string[]>(initialRepair?.assignedUsers ?? []);
   const [assignedInput, setAssignedInput] = useState('');
   const [date, setDate] = useState(initialRepair?.date ?? '');
   const [cost, setCost] = useState(initialRepair ? String(initialRepair.cost) : '');
@@ -252,7 +252,7 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
   const assignedSuggestions = useMemo(() => {
     const term = assignedInput.trim().toLowerCase();
     return directoryUsers
-      .filter(u => !assignedUsers.some(a => a.name.toLowerCase() === u.name.toLowerCase()))
+      .filter(u => !assignedUsers.some(name => name.toLowerCase() === u.name.toLowerCase()))
       .filter(u => !term || u.name.toLowerCase().includes(term))
       .slice(0, 6);
   }, [directoryUsers, assignedUsers, assignedInput]);
@@ -265,10 +265,11 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
     setErrors(prev => ({ ...prev, approvalTags: undefined }));
   };
 
-  const addAssignedUser = (candidate: RepairAssignedUser) => {
-    if (!candidate.name.trim()) return;
-    if (assignedUsers.some(a => a.name.toLowerCase() === candidate.name.trim().toLowerCase())) return;
-    setAssignedUsers(prev => [...prev, { name: candidate.name.trim(), email: candidate.email }]);
+  const addAssignedUser = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (assignedUsers.some(n => n.toLowerCase() === trimmed.toLowerCase())) return;
+    setAssignedUsers(prev => [...prev, trimmed]);
     setAssignedInput('');
     setErrors(prev => ({ ...prev, assignedUsers: undefined }));
   };
@@ -608,14 +609,14 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
                 style={chipContainerStyle}
                 onClick={() => assignedInputRef.current?.focus()}
               >
-                {assignedUsers.map(u => (
-                  <span key={u.name} style={chipStyle}>
-                    {u.name}
+                {assignedUsers.map(name => (
+                  <span key={name} style={chipStyle}>
+                    {name}
                     <button
                       type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        setAssignedUsers(prev => prev.filter(a => a.name !== u.name));
+                        setAssignedUsers(prev => prev.filter(n => n !== name));
                       }}
                       style={{
                         background: 'none',
@@ -640,8 +641,7 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
                   onKeyDown={e => {
                     if (e.key === 'Enter' && assignedInput.trim()) {
                       e.preventDefault();
-                      const match = directoryUsers.find(u => u.name.toLowerCase() === assignedInput.trim().toLowerCase());
-                      addAssignedUser(match || { name: assignedInput });
+                      addAssignedUser(assignedInput.trim());
                     }
                   }}
                   placeholder="Add..."
@@ -655,7 +655,7 @@ export function CreateRepairRequestModal({ onClose, onSubmit, initialRepair = nu
                     <button
                       key={u.name}
                       type="button"
-                      onClick={() => addAssignedUser(u)}
+                      onClick={() => addAssignedUser(u.name)}
                       style={dropdownItemStyle}
                       onMouseEnter={e => { e.currentTarget.style.background = '#EFF6FF'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
