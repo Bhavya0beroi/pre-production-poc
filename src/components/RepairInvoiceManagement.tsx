@@ -4,6 +4,14 @@ import type { RepairRequest } from '../services/repairService';
 import { uploadRepairInvoice, confirmRepairPayment, markRepairAsPaid } from '../services/repairService';
 import { useAuth } from '../context/AuthContext';
 
+const API_URL = import.meta.env.DEV
+  ? 'http://localhost:3001'
+  : 'https://divine-nature-production-c49a.up.railway.app';
+
+/** Converts a server-relative path like /uploads/file.pdf to an absolute URL. */
+const resolveUrl = (url: string | null | undefined): string =>
+  url ? (url.startsWith('/') ? `${API_URL}${url}` : url) : '';
+
 interface RepairInvoiceManagementProps {
   repair: RepairRequest;
   onClose: () => void;
@@ -111,9 +119,8 @@ export function RepairInvoiceManagement({ repair, onClose, onUploadSuccess }: Re
   };
 
   const handleDownload = () => {
-    if (repair.invoiceUrl) {
-      window.open(repair.invoiceUrl, '_blank');
-    }
+    const url = resolveUrl(repair.invoiceUrl);
+    if (url) window.open(url, '_blank');
   };
 
   const formatDate = (dateStr: string) => {
@@ -374,7 +381,7 @@ export function RepairInvoiceManagement({ repair, onClose, onUploadSuccess }: Re
               >
                 {repair.invoiceUrl ? (
                   <iframe
-                    src={repair.invoiceUrl}
+                    src={resolveUrl(repair.invoiceUrl)}
                     className="w-full h-full rounded-xl"
                     style={{ minHeight: '520px' }}
                     title="Invoice Preview"

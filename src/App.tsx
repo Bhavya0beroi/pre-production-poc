@@ -842,6 +842,7 @@ function AppContent() {
                 approvedAmount: s.approved_amount,
                 invoiceFile: s.invoice_file,
                 paid: s.paid,
+                paymentConfirmed: s.payment_confirmed || false,
                 rejectionReason: s.rejection_reason,
                 approvalEmail: approvalEmail,
                 cancellationReason: s.cancellation_reason,

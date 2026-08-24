@@ -621,7 +621,7 @@ export function ApprovalScreen({ shoots, allShoots, onApprove, onReject, onBack,
                         <td className="px-6 py-4 text-gray-600">{repair.date}</td>
                         <td className="px-6 py-4 text-gray-700">{repair.requestorName}</td>
                         <td className="px-6 py-4 text-gray-600">
-                          {(repair.assignedUsers || []).map(u => u.name).join(', ') || '—'}
+                          {(repair.assignedUsers || []).join(', ') || '—'}
                         </td>
                         <td className="px-6 py-4">
                           <span className="font-semibold" style={{ color: '#27AE60' }}>{formatRupees(repair.cost)}</span>

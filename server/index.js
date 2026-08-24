@@ -2284,6 +2284,18 @@ app.patch('/api/repairs/:id', requireModule('repairs'), async (req, res) => {
     }
 
     const autoApproved = value.cost < REPAIR_APPROVAL_THRESHOLD;
+    // If already in Pending Invoice (previously approved/auto-approved), preserve that status.
+    // Only recalculate when still in Pending Approval.
+    const alreadyApproved = currentStatus === 'Pending Invoice';
+    const newStatus = alreadyApproved ? 'Pending Invoice'
+      : (autoApproved ? 'Pending Invoice' : 'Pending Approval');
+    const newApprovedBy = alreadyApproved
+      ? existing.rows[0].approved_by
+      : (autoApproved ? 'Auto-approved' : null);
+    const newApprovedAt = alreadyApproved
+      ? existing.rows[0].approved_at
+      : (autoApproved ? new Date() : null);
+
     const result = await pool.query(
       `UPDATE repair_requests SET
          requestor_name = $2, approval_tags = $3, item = $4, action = $5, device_type = $6,
@@ -2303,9 +2315,9 @@ app.patch('/api/repairs/:id', requireModule('repairs'), async (req, res) => {
         JSON.stringify(value.assignedUsers),
         value.date,
         value.cost,
-        autoApproved ? 'Pending Invoice' : 'Pending Approval',
-        autoApproved ? 'Auto-approved' : null,
-        autoApproved ? new Date() : null,
+        newStatus,
+        newApprovedBy,
+        newApprovedAt,
       ]
     );
     res.json(mapRepairRow(result.rows[0]));
