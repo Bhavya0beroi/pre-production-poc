@@ -245,7 +245,8 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
       const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(repair.date);
       if (match) {
         const [, year, month] = match;
-        const monthKey = `${year}-${month}`;
+        // Use 0-indexed month (same as shoots) so formatMonthLabel works correctly
+        const monthKey = `${year}-${String(parseInt(month) - 1).padStart(2, '0')}`;
         if (!groups[monthKey]) {
           groups[monthKey] = [];
         }
