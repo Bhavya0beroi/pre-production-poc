@@ -38,6 +38,7 @@ interface FinanceDashboardProps {
   onOpenCatalog: () => void;
   onOpenArchive: () => void;
   onRefreshRepairs: () => Promise<void>;
+  onFetchFullShoot?: (shootId: string) => Promise<Shoot | null>;
 }
 
 type FilterTab = 'all' | 'paid' | 'pending';
@@ -45,7 +46,7 @@ type ViewMode = 'list' | 'chart';
 type ChartView = 'monthly' | 'daily';
 type ModuleTab = 'shoots' | 'repairs';
 
-export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, onRefreshRepairs }: FinanceDashboardProps) {
+export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onOpenApprovals, onOpenCatalog, onOpenArchive, onOpenSlackSettings, onOpenRolePanel, onOpenRepairs, onRefreshRepairs, onFetchFullShoot }: FinanceDashboardProps) {
   // Debug log
   console.log('📊 FinanceDashboard received', shoots?.length || 0, 'shoots');
   
@@ -73,8 +74,13 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const approvalsPending = shoots.filter(s => s.status === 'with_swati').length;
 
-  const openPdfViewer = (shoot: Shoot) => {
-    setSelectedInvoice(shoot);
+  const openPdfViewer = async (shoot: Shoot) => {
+    let target = shoot;
+    if (target.invoiceFile?.hasData && !target.invoiceFile?.data && onFetchFullShoot) {
+      const full = await onFetchFullShoot(target.id);
+      if (full) target = full;
+    }
+    setSelectedInvoice(target);
     setShowPdfModal(true);
   };
 
@@ -1495,7 +1501,7 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
                                 (e.rate || e.price || e.dailyRate || e.vendorRate || e.rentalCost || e.cost || e.total || e.totalCost || e.name || e.itemName) 
                               );
                             // Always make clickable if has equipment OR has invoice file
-                            const isClickable = hasEquipment || invoice.invoiceFile?.data;
+                            const isClickable = hasEquipment || invoice.invoiceFile?.data || invoice.invoiceFile?.hasData;
                             
                             return (
                               <div key={invoice.id}>
@@ -1540,7 +1546,7 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
                                 {isInvoiceExpanded && isClickable && (
                                   <div className="bg-gray-50 px-5 py-4 ml-11 mr-5 mb-3 rounded-lg">
                                     {/* Invoice PDF Preview */}
-                                    {invoice.invoiceFile?.data && (
+                                    {(invoice.invoiceFile?.data || invoice.invoiceFile?.hasData) && (
                                       <div className="mb-4">
                                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                                           Invoice Document

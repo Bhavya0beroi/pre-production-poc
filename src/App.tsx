@@ -89,8 +89,9 @@ export interface Shoot {
   approvedAmount?: number;
   invoiceFile?: {
     name: string;
-    url: string;
+    url?: string;
     data?: string; // Base64 encoded PDF data
+    hasData?: boolean; // true when PDF exists but was stripped from list API response
   };
   paymentConfirmed?: boolean; // Finance team confirms payment was sent to vendor
   paid?: boolean;
@@ -167,6 +168,48 @@ const saveToStorage = <T,>(key: string, value: T): void => {
     console.error(`Error saving ${key} to localStorage:`, e);
   }
 };
+
+function formatApiShootRow(s: any): Shoot {
+  let approvalEmail = s.approval_email;
+  if (typeof approvalEmail === 'string' && approvalEmail.startsWith('[')) {
+    try {
+      approvalEmail = JSON.parse(approvalEmail);
+    } catch {
+      console.warn('Failed to parse approval_email');
+    }
+  }
+
+  return {
+    id: s.id,
+    name: s.name,
+    date: s.date,
+    duration: s.duration,
+    location: s.location,
+    callTime: s.call_time,
+    equipment: s.equipment || [],
+    status: s.status,
+    requestor: s.requestor,
+    vendorQuote: s.vendor_quote,
+    approved: s.approved,
+    approvedAmount: s.approved_amount,
+    invoiceFile: s.invoice_file || undefined,
+    paid: s.paid,
+    paymentConfirmed: s.payment_confirmed || false,
+    rejectionReason: s.rejection_reason,
+    approvalEmail,
+    cancellationReason: s.cancellation_reason,
+    activities: s.activities || [],
+    emailThreadId: s.email_thread_id,
+    createdAt: s.created_at ? new Date(s.created_at) : undefined,
+    shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
+    requestGroupId: s.request_group_id,
+    isMultiShoot: s.is_multi_shoot,
+    multiShootIndex: s.multi_shoot_index,
+    totalShootsInRequest: s.total_shoots_in_request,
+    slackMentions: s.slack_mentions || [],
+    slackApprovalMentions: s.slack_approval_mentions || [],
+  };
+}
 
 function AppContent() {
   const { isAuthenticated, isAdmin, isSuperAdmin, user, logout, moduleAccess } = useAuth();
@@ -825,7 +868,7 @@ function AppContent() {
           fetch(`${API_URL}/api/shoots`, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
-            signal: timeoutSignal(8000)
+            signal: timeoutSignal(30000)
           }),
           fetch(`${API_URL}/api/catalog`, {
             signal: timeoutSignal(8000)
@@ -837,49 +880,7 @@ function AppContent() {
           const shootsData = await shootsResponse.json();
           console.log('📦 Raw shoots data from API:', shootsData.length, 'shoots');
           if (Array.isArray(shootsData) && shootsData.length > 0) {
-            const formattedShoots: Shoot[] = shootsData.map((s: any) => {
-              // Parse approval_email: if it's a JSON string, parse it; otherwise use as-is
-              let approvalEmail = s.approval_email;
-              if (typeof approvalEmail === 'string' && approvalEmail.startsWith('[')) {
-                try {
-                  approvalEmail = JSON.parse(approvalEmail);
-                } catch (e) {
-                  // If parse fails, keep it as string
-                  console.warn('Failed to parse approval_email:', e);
-                }
-              }
-              
-              return {
-                id: s.id,
-                name: s.name,
-                date: s.date,
-                duration: s.duration,
-                location: s.location,
-                callTime: s.call_time,
-                equipment: s.equipment || [],
-                status: s.status,
-                requestor: s.requestor,
-                vendorQuote: s.vendor_quote,
-                approved: s.approved,
-                approvedAmount: s.approved_amount,
-                invoiceFile: s.invoice_file,
-                paid: s.paid,
-                paymentConfirmed: s.payment_confirmed || false,
-                rejectionReason: s.rejection_reason,
-                approvalEmail: approvalEmail,
-                cancellationReason: s.cancellation_reason,
-                activities: s.activities || [],
-                emailThreadId: s.email_thread_id,
-                createdAt: s.created_at ? new Date(s.created_at) : undefined,
-                shootDate: s.shoot_date ? new Date(s.shoot_date) : undefined,
-                requestGroupId: s.request_group_id,
-                isMultiShoot: s.is_multi_shoot,
-                multiShootIndex: s.multi_shoot_index,
-                totalShootsInRequest: s.total_shoots_in_request,
-                slackMentions: s.slack_mentions || [],
-                slackApprovalMentions: s.slack_approval_mentions || [],
-              };
-            });
+            const formattedShoots: Shoot[] = shootsData.map(formatApiShootRow);
             setShoots(formattedShoots);
             console.log('✅ Loaded', formattedShoots.length, 'shoots from API');
             console.log('📊 First shoot:', formattedShoots[0]?.name);
@@ -1668,8 +1669,25 @@ function AppContent() {
     setViewMode('vendor');
   };
 
-  const handleOpenInvoiceModal = (shootId: string) => {
+  const fetchFullShoot = async (shootId: string): Promise<Shoot | null> => {
+    try {
+      const res = await fetch(`${API_URL}/api/shoots/${encodeURIComponent(shootId)}`);
+      if (!res.ok) return null;
+      const full = formatApiShootRow(await res.json());
+      setShoots(prev => prev.map(s => (s.id === shootId ? full : s)));
+      return full;
+    } catch (e) {
+      console.error('Failed to fetch full shoot:', e);
+      return null;
+    }
+  };
+
+  const handleOpenInvoiceModal = async (shootId: string) => {
     setSelectedShootId(shootId);
+    const existing = shoots.find(s => s.id === shootId);
+    if (existing?.invoiceFile?.hasData && !existing.invoiceFile?.data) {
+      await fetchFullShoot(shootId);
+    }
     setViewMode('invoice');
   };
 
@@ -2073,6 +2091,7 @@ function AppContent() {
           onOpenRolePanel={() => setViewMode('role_panel')}
           onOpenRepairs={() => setViewMode('repairs')}
           onRefreshRepairs={loadRepairs}
+          onFetchFullShoot={fetchFullShoot}
         />
       )}
 

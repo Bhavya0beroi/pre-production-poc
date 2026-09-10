@@ -1036,7 +1036,22 @@ app.get('/api/health', async (req, res) => {
   res.status(statusCode).json(health);
 });
 
-// Get all shoots
+/** List responses omit embedded PDF base64 — 70 shoots with invoices was ~13MB and timed out in the browser. */
+function stripInvoicePdfForList(invoiceFile) {
+  if (!invoiceFile || typeof invoiceFile !== 'object') return invoiceFile;
+  if (!invoiceFile.data) return invoiceFile;
+  const { data: _data, ...meta } = invoiceFile;
+  return { ...meta, hasData: true };
+}
+
+function mapShootForList(row) {
+  return {
+    ...row,
+    invoice_file: stripInvoicePdfForList(row.invoice_file),
+  };
+}
+
+// Get all shoots (invoice PDF bytes excluded — use GET /api/shoots/:id for full invoice)
 app.get('/api/shoots', async (req, res) => {
   // Check if database is configured
   if (!process.env.DATABASE_URL) {
@@ -1049,14 +1064,32 @@ app.get('/api/shoots', async (req, res) => {
 
   try {
     const result = await pool.query('SELECT * FROM shoots ORDER BY created_at DESC');
-    console.log(`✅ GET /api/shoots - Returned ${result.rows.length} shoots`);
-    res.json(result.rows);
+    const rows = result.rows.map(mapShootForList);
+    console.log(`✅ GET /api/shoots - Returned ${rows.length} shoots (list view, PDF data stripped)`);
+    res.json(rows);
   } catch (error) {
     console.error('❌ Error fetching shoots:', error.message);
     res.status(500).json({ 
       error: 'Failed to fetch shoots', 
       details: error.message 
     });
+  }
+});
+
+// Get one shoot with full invoice PDF data (for invoice preview / download)
+app.get('/api/shoots/:id', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const result = await pool.query('SELECT * FROM shoots WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shoot not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Error fetching shoot:', error.message);
+    res.status(500).json({ error: 'Failed to fetch shoot', details: error.message });
   }
 });
 
