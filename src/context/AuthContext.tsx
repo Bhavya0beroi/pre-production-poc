@@ -47,6 +47,25 @@ const API_URL = import.meta.env.DEV
 
 const AUTH_STORAGE_KEY = 'preproduction_auth';
 
+/** Shared org data in localStorage — clear on logout so the next account never sees stale rows. */
+const APP_DATA_KEYS = [
+  'shootflow_shoots_v3',
+  'shootflow_catalog_v3',
+  'shootflow_notifications_v3',
+  'shootflow_viewMode',
+  'shootflow_selectedShoot',
+];
+
+function clearAppDataCache() {
+  APP_DATA_KEYS.forEach(key => localStorage.removeItem(key));
+}
+
+function persistUserAndReload(userData: User) {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+  // Full reload so AppContent mounts already authenticated and loads shoots from the API.
+  window.location.assign(window.location.pathname + window.location.search);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -82,11 +101,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        setUser({
+        clearAppDataCache();
+        persistUserAndReload({
           email: data.user.email,
           role: data.user.role as UserRole,
           name: data.user.name,
-          moduleAccess: resolveModuleAccess(data.user.role, data.user.module_access)
+          moduleAccess: resolveModuleAccess(data.user.role, data.user.module_access),
         });
         return true;
       }
@@ -103,11 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fallback: check hardcoded users
     const userConfig = FALLBACK_USERS[normalizedEmail];
     if (userConfig && userConfig.password === password) {
-      setUser({
+      clearAppDataCache();
+      persistUserAndReload({
         email: normalizedEmail,
         role: userConfig.role,
         name: userConfig.name,
-        moduleAccess: resolveModuleAccess(userConfig.role, null)
+        moduleAccess: resolveModuleAccess(userConfig.role, null),
       });
       return true;
     }
@@ -116,7 +137,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    clearAppDataCache();
+    localStorage.removeItem(AUTH_STORAGE_KEY);
     setUser(null);
+    window.location.assign(window.location.pathname);
   };
 
   const value: AuthContextType = {

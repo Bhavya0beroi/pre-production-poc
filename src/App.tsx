@@ -927,9 +927,9 @@ function AppContent() {
       }
     };
 
-    // Force reload data from API every time, don't rely on localStorage
+    if (!isAuthenticated) return;
     loadDataFromAPI();
-  }, []);
+  }, [isAuthenticated, user?.email]);
 
   // Persist catalog to localStorage (and Supabase if configured)
   useEffect(() => {
