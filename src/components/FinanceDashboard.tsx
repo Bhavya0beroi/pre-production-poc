@@ -1610,7 +1610,7 @@ export function FinanceDashboard({ shoots, repairs, onBack, onUploadInvoice, onO
                                     )}
                                     
                                     {/* If no equipment but has PDF */}
-                                    {!hasEquipment && invoice.invoiceFile?.data && (
+                                    {!hasEquipment && (invoice.invoiceFile?.data || invoice.invoiceFile?.hasData) && (
                                       <div className="text-sm text-gray-500 mt-2">
                                         Click "View Invoice PDF" above to see the full invoice details.
                                       </div>

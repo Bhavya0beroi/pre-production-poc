@@ -928,9 +928,10 @@ function AppContent() {
       }
     };
 
-    if (!isAuthenticated) return;
+    // Vendors open ?vendor= without login — they still need shoot data from the API
+    if (!isAuthenticated && !vendorShootId) return;
     loadDataFromAPI();
-  }, [isAuthenticated, user?.email]);
+  }, [isAuthenticated, user?.email, vendorShootId]);
 
   // Persist catalog to localStorage (and Supabase if configured)
   useEffect(() => {
@@ -964,7 +965,11 @@ function AppContent() {
       vendor_quote: shoot.vendorQuote,
       approved: shoot.approved,
       approved_amount: shoot.approvedAmount,
-      invoice_file: shoot.invoiceFile,
+      invoice_file: shoot.invoiceFile?.url
+        ? { name: shoot.invoiceFile.name, url: shoot.invoiceFile.url, hasData: shoot.invoiceFile.hasData }
+        : shoot.invoiceFile?.data
+          ? { name: shoot.invoiceFile.name, data: shoot.invoiceFile.data }
+          : shoot.invoiceFile,
       paid: shoot.paid,
       rejection_reason: shoot.rejectionReason,
       approval_email: shoot.approvalEmail,
@@ -1567,24 +1572,39 @@ function AppContent() {
     });
   };
 
-  const handleUploadInvoice = async (shootId: string, fileName: string, fileData?: string) => {
+  const handleUploadInvoice = async (shootId: string, file: File) => {
     const shoot = shoots.find(s => s.id === shootId);
     if (!shoot) return;
+    if (!API_URL) {
+      throw new Error('API not configured');
+    }
 
-    const updatedShoot = {
-      ...shoot,
-      status: 'pending_invoice' as ShootStatus,
-            invoiceFile: {
-              name: fileName,
-        url: '#',
-        data: fileData // Store base64 PDF data
+    const formData = new FormData();
+    formData.append('invoice', file);
+
+    const response = await fetch(`${API_URL}/api/shoots/${shootId}/invoice`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let message = `Request failed (${response.status})`;
+      try {
+        const body = await response.json();
+        message = body.error || body.details || message;
+      } catch {
+        /* non-JSON body */
       }
+      throw new Error(message);
+    }
+
+    const row = await response.json();
+    const updatedShoot: Shoot = {
+      ...formatApiShootRow(row),
+      status: shoot.status,
     };
 
-    // Save to API first
-    await saveShootToAPI(updatedShoot);
-
-    setShoots(prev => prev.map(s => s.id === shootId ? updatedShoot : s));
+    setShoots(prev => prev.map(s => (s.id === shootId ? updatedShoot : s)));
     
     // Send invoice uploaded email via SMTP to finance
       triggerEmail(
@@ -1595,7 +1615,7 @@ function AppContent() {
       { shoot: updatedShoot }
       );
       
-      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${fileName}`);
+      addActivityToShoot(shootId, 'Invoice Uploaded', `File: ${file.name}`);
 
     getSlackSettings().then(sl => {
       if (!sl.webhook_url) return;
@@ -1603,7 +1623,7 @@ function AppContent() {
       slackInvoiceUploaded(sl.webhook_url, {
         id: shootId, name: shoot.name,
         dates: shoot.date || shoot.dates || '—',
-        fileName,
+        fileName: file.name,
       }, mentions).catch(() => {});
     });
   };

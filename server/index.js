@@ -1076,6 +1076,43 @@ app.get('/api/shoots', async (req, res) => {
   }
 });
 
+// Upload shoot invoice as multipart file (avoids 413 from base64-in-JSON on Railway)
+app.post('/api/shoots/:id/invoice', upload.single('invoice'), async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const existing = await pool.query('SELECT id FROM shoots WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Shoot not found' });
+    }
+
+    const invoiceFile = {
+      name: req.file.originalname,
+      url: `/uploads/${req.file.filename}`,
+    };
+
+    const result = await pool.query(
+      `UPDATE shoots SET invoice_file = $2::jsonb WHERE id = $1 RETURNING *`,
+      [req.params.id, JSON.stringify(invoiceFile)]
+    );
+
+    console.log(`✅ Shoot invoice uploaded for ${req.params.id} → ${invoiceFile.url}`);
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+    }
+    console.error('❌ Error uploading shoot invoice:', error.message);
+    res.status(500).json({ error: 'Failed to upload invoice', details: error.message });
+  }
+});
+
 // Get one shoot with full invoice PDF data (for invoice preview / download)
 app.get('/api/shoots/:id', async (req, res) => {
   if (!process.env.DATABASE_URL) {
