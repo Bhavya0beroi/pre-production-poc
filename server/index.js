@@ -1076,8 +1076,47 @@ app.get('/api/shoots', async (req, res) => {
   }
 });
 
+// Vendor quote links: load only the shoot(s) for this link id (shoot id or request_group_id)
+app.get('/api/vendor/shoots/:linkId', async (req, res) => {
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: 'Database not configured' });
+  }
+  try {
+    const linkId = req.params.linkId;
+    let rows = (await pool.query('SELECT * FROM shoots WHERE id = $1', [linkId])).rows;
+    if (rows.length === 0) {
+      rows = (await pool.query(
+        'SELECT * FROM shoots WHERE request_group_id = $1 ORDER BY multi_shoot_index NULLS LAST, created_at ASC',
+        [linkId]
+      )).rows;
+    } else if (rows[0].request_group_id) {
+      rows = (await pool.query(
+        'SELECT * FROM shoots WHERE request_group_id = $1 ORDER BY multi_shoot_index NULLS LAST, created_at ASC',
+        [rows[0].request_group_id]
+      )).rows;
+    }
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Shoot not found for this vendor link' });
+    }
+    res.json(rows.map(mapShootForList));
+  } catch (error) {
+    console.error('❌ Error loading vendor shoots:', error.message);
+    res.status(500).json({ error: 'Failed to load vendor shoots', details: error.message });
+  }
+});
+
 // Upload shoot invoice as multipart file (avoids 413 from base64-in-JSON on Railway)
-app.post('/api/shoots/:id/invoice', upload.single('invoice'), async (req, res) => {
+app.post('/api/shoots/:id/invoice', (req, res, next) => {
+  upload.single('invoice')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'PDF is too large. Maximum size is 10 MB.' });
+      }
+      return res.status(400).json({ error: err.message || 'Invalid upload' });
+    }
+    next();
+  });
+}, async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(503).json({ error: 'Database not configured' });
   }

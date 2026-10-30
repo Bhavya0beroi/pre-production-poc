@@ -863,16 +863,22 @@ function AppContent() {
       };
 
       try {
+        const shootsUrl = vendorShootId && !isAuthenticated
+          ? `${API_URL}/api/vendor/shoots/${encodeURIComponent(vendorShootId)}`
+          : `${API_URL}/api/shoots`;
+
         // Fetch shoots and catalog in PARALLEL for faster loading
         const [shootsResponse, catalogResponse] = await Promise.all([
-          fetch(`${API_URL}/api/shoots`, {
+          fetch(shootsUrl, {
             method: 'GET',
             headers: { 'Accept': 'application/json' },
             signal: timeoutSignal(30000)
           }),
-          fetch(`${API_URL}/api/catalog`, {
-            signal: timeoutSignal(8000)
-          })
+          vendorShootId && !isAuthenticated
+            ? Promise.resolve({ ok: false, status: 204 } as Response)
+            : fetch(`${API_URL}/api/catalog`, {
+                signal: timeoutSignal(8000)
+              })
         ]);
         
         // Process shoots
@@ -965,11 +971,14 @@ function AppContent() {
       vendor_quote: shoot.vendorQuote,
       approved: shoot.approved,
       approved_amount: shoot.approvedAmount,
-      invoice_file: shoot.invoiceFile?.url
-        ? { name: shoot.invoiceFile.name, url: shoot.invoiceFile.url, hasData: shoot.invoiceFile.hasData }
-        : shoot.invoiceFile?.data
-          ? { name: shoot.invoiceFile.name, data: shoot.invoiceFile.data }
-          : shoot.invoiceFile,
+      // Never POST embedded PDF base64 — use POST /api/shoots/:id/invoice for files
+      invoice_file: shoot.invoiceFile
+        ? {
+            name: shoot.invoiceFile.name,
+            url: shoot.invoiceFile.url,
+            hasData: shoot.invoiceFile.hasData,
+          }
+        : undefined,
       paid: shoot.paid,
       rejection_reason: shoot.rejectionReason,
       approval_email: shoot.approvalEmail,
@@ -1582,10 +1591,10 @@ function AppContent() {
     const formData = new FormData();
     formData.append('invoice', file);
 
-    const response = await fetch(`${API_URL}/api/shoots/${shootId}/invoice`, {
-      method: 'POST',
-      body: formData,
-    });
+    const response = await fetch(
+      `${API_URL}/api/shoots/${encodeURIComponent(shootId)}/invoice`,
+      { method: 'POST', body: formData }
+    );
 
     if (!response.ok) {
       let message = `Request failed (${response.status})`;
@@ -1594,6 +1603,14 @@ function AppContent() {
         message = body.error || body.details || message;
       } catch {
         /* non-JSON body */
+      }
+      if (response.status === 413) {
+        message =
+          'PDF is too large for upload (max 10 MB), or your browser is using an old cached version of the app. Try a smaller PDF, then hard-refresh the page (Ctrl+Shift+R).';
+      }
+      if (response.status === 404) {
+        message =
+          'This shoot was not found on the server. Refresh the dashboard and try again — the shoot may not have saved correctly.';
       }
       throw new Error(message);
     }

@@ -107,7 +107,7 @@ export function InvoiceManagement({ shoot, onUploadInvoice, onConfirmPayment, on
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-2xl">Invoice Management</h2>
+          <h2 className="text-2xl">Upload Invoice for {shoot.name}</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
